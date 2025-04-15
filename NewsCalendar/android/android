@@ -1,0 +1,13 @@
+<script>start("c:\\Users\\alok4\\Desktop\\news\\android\\");</script>
+<script>onHasParentDirectory();</script>
+<script>addRow(".gradle",".gradle",1,0,"0 B",1744560557,"4/13/25, 9:39:17 PM");</script>
+<script>addRow("app","app",1,0,"0 B",1744560561,"4/13/25, 9:39:21 PM");</script>
+<script>addRow("gradle","gradle",1,0,"0 B",1744560425,"4/13/25, 9:37:05 PM");</script>
+<script>addRow(".gitignore",".gitignore",0,267,"267 B",1740670244,"2/27/25, 9:00:44 PM");</script>
+<script>addRow("build.gradle.kts","build.gradle.kts",0,536,"536 B",1744560425,"4/13/25, 9:37:05 PM");</script>
+<script>addRow("gradle.properties","gradle.properties",0,169,"169 B",1744560425,"4/13/25, 9:37:05 PM");</script>
+<script>addRow("gradlew","gradlew",0,4971,"4.9 kB",1744560425,"4/13/25, 9:37:05 PM");</script>
+<script>addRow("gradlew.bat","gradlew.bat",0,2404,"2.3 kB",1744560425,"4/13/25, 9:37:05 PM");</script>
+<script>addRow("local.properties","local.properties",0,164,"164 B",1744560516,"4/13/25, 9:38:36 PM");</script>
+<script>addRow("news_android.iml","news_android.iml",0,1630,"1.6 kB",1744560425,"4/13/25, 9:37:05 PM");</script>
+<script>addRow("settings.gradle.kts","settings.gradle.kts",0,764,"764 B",1744560425,"4/13/25, 9:37:05 PM");</script>

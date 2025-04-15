@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "bamboo-research-452705-u8",
+  "private_key_id": "6ebb1bbd471ae939bbdaa8aa6335fe8adbe7185d",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCVcMJrLfqw/+ed\no2lQegzSWlSlNL0XxW3LF394ylqsNqGO228dxn4A4y/y5trzsxxG1Jdjl6nlwhLj\nWnCb3Y0iT1vH2KrBxs13ovQoO9RVtZ3fSbUtEphEJN6Nl8bd+8vnJVG2YFsQAPBS\nthQ2dsDkvOVhWEyCWG8ol2dLELUsjdNjdt0KCyiZOdrw5YW8vqXNhZRjpWrHfpDK\nVpznfv2zfEFbKsLDvpC8nPC/4EdobkEpUS4RIQM+NOfUAUDKMJraP62OPVB+KZtI\nxv4p7NTp42ayoEPKt8Mz1FPWRZOiM4Rb+bAWJ2lSPjwDpGQ0ADYnKclGrgLapXNI\n6zq52pHpAgMBAAECggEAMGccYbC70RaiA3oJQ2q0unFNl1D0qj1lKXHL9Oi946ey\nPl4uqFtBNrJfNnK1mld6Iir7eeOGwQdSLNd/P8zLyMAhfyJbdHYa2NQr9tgiFzzD\nDK6IAzhRn0i92Oi/HelPiueYhtTAyfcz3+Zft6BRLAVO2m/KIDHalzAq4bJgrDQo\n7QUlt0avMb495sFVnSTK1o7YBDZqIe5fqew2TlrJvTiE+BmWIkRUpkDPn/gaBlOV\nkwBZb0htoBInTezOmKhRL9zp+cDPAmypPFUGO6wSkQmvWQEZkDq09paqhzBocEbL\nmMFHTT2LfhWIWynCiTZ4cL5F6nlvxvxkGWRP+D5QnQKBgQDKFzUCsn0I+neZoq6B\n228ceXQ7jpX6WSeWLL+9YFlp7fqoZlw+TPNtUk6z/MI99mMcp+fQKP8JkMQOo5VD\nuFlXAn7ydi/+BDNn5imR1OSf+Fdzfq32JiGJWFy+6Zu0jneUeCR/gHTo3PPYUCML\nr1ZyYybtbqGuvn8xIBAwL8qY3wKBgQC9ThC8OQnLVsRJFZb/RHO0dpNZG+Vt/Z6u\nZGCvLyScfak5h3mfnPVKGNiXqXHUpCJGbG2L4mTNLoXaQvT2BV8sGzdFiTb04ASz\necqU25hYrSOBOf7KbMgLQ/jy+6exaMRkinHZlsKqYjL5uHj94wV5VxNccadPXYBM\nV0g3jZGGNwKBgQCiGWtT9oeEpCM7ANqpHrJJTMKG4yA55zlxpANIi/gsl87vNOvY\nrTC1B8hJZv0HZpKpcaTnu3qW2Z/pfh1EbKJ8wGvDYDmurv/s3xmI+BNKnZDH+1ze\njEdqO45pNEjI013noVblTsx33INbhywVO1dD+XRIDu1xlSvA488YV71SUQKBgQCv\ndRavzlIUpKQjdR5SFNkFT838jo2U57hWvPScCp7taM8bYkTJOspi1iqST1wREdwu\n17qlJ730KwWnKd4v1QTENamCCs7kImpZCy5H0E0hC8DXurA8YJz9TBAG7lccaRV2\ndpdVbJWbJI9Iw8Fo2C0vrRRl33WKawhKOa/WxaE2+wKBgAItTDsErA6iWyAOP7M3\nsGHfLqiUgKTrwIKXoJtsEpGxJ7GKYyXAzJfDHOha/6SOoQ02oHf6wRDg+k9hJUy+\nC2fC3vAegJuHHzAZiAFZmBh5bAXrzJNcpWo6RDQ9VBrQIi10Qocd5ETOIrRlx0lV\nBrn9yel9yNWPEX07njSZMnHS\n-----END PRIVATE KEY-----\n",
+  "client_email": "vision-api-service@bamboo-research-452705-u8.iam.gserviceaccount.com",
+  "client_id": "106972586083731094154",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/vision-api-service%40bamboo-research-452705-u8.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

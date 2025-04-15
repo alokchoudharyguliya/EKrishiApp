@@ -1,0 +1,15 @@
+Step 3: Call Natural Language API to detect events & dates
+      final languageResponse = await http.post(
+        Uri.parse(
+          'https://language.googleapis.com/v1/documents:analyzeEntities?key=$_apiKey',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "document": {
+            "type": "PLAIN_TEXT",
+            "content": fullText,
+            // .body["responses"][0]["textAnnotations"]["description"],
+          },
+          "encodingType": "UTF8",
+        }),
+      );
