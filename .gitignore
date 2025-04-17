@@ -3,3 +3,4 @@
 /NewsCalendar/build/
 *.json
 /node_modules/
+*.dill
