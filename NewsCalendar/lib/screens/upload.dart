@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:newscalendar/constants/constants.dart';
+import '../models/events.dart';
+import 'edit_event_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_vertexai/firebase_vertexai.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import '../firebase_options.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:path_provider/path_provider.dart';
-import 'edit_event_screen.dart';
-import 'package:intl/intl.dart';
 
 class ImageUploadScreen extends StatefulWidget {
   @override
@@ -19,14 +20,12 @@ class ImageUploadScreen extends StatefulWidget {
 class _ImageUploadScreenState extends State<ImageUploadScreen> {
   File? _image;
   String _extractedText = "";
-  List<Map<String, dynamic>> _events = [];
   bool _isLoading = false;
   String _vertexAIResponse = "";
-  static const String _apiKey =
-      'AIzaSyAZjj3WDWIPST9r4W0T5QNVv80SGH6jMSM'; // Replace with your actual API key
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  List<Event> _events = [];
+  // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isFirebaseInitialized = false;
+  static const String _apiKey = 'AIzaSyAZjj3WDWIPST9r4W0T5QNVv80SGH6jMSM';
 
   @override
   void initState() {
@@ -47,68 +46,6 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     }
   }
 
-  Future<void> _saveToJsonFile(List<Map<String, dynamic>> events) async {
-    //   try {
-    //     final directory = await getApplicationDocumentsDirectory();
-    //     final file = File('${directory.path}/events.json');
-    //     await file.writeAsString(jsonEncode({'events': events}));
-    //     print('Events saved to ${file.path}');
-    //   } catch (e) {
-    //     print('Error saving to JSON file: $e');
-    //   }
-  }
-
-  Future<void> _saveToFirestore(List<Map<String, dynamic>> events) async {
-    // if (!_isFirebaseInitialized) {
-    //   print('Firebase not initialized');
-    //   return;
-    // }
-
-    try {
-      final collectionRef = _firestore.collection('events');
-      final batch = _firestore.batch();
-
-      for (var event in events) {
-        final docRef = collectionRef.doc();
-        batch.set(docRef, {
-          'event': event['event'],
-          'start_date': event['start_date'],
-          'end_date': event['end_date'],
-        });
-      }
-
-      await batch.commit();
-      print('Events saved to Firestore');
-    } catch (e) {
-      print('Error saving to Firestore: $e');
-    }
-    // const String apiUrl =
-    //     'https://your-api-endpoint.com/events'; // Replace with your API URL
-    // try {
-    //   final response = await http.post(
-    //     Uri.parse(apiUrl),
-    //     headers: {
-    //       'Content-Type': 'application/json', // Required for JSON data
-    //     },
-    //     body: jsonEncode({
-    //       'events': events, // Same structure as your JSON file logic
-    //       'createdAt':
-    //           DateTime.now().toIso8601String(), // Optional: Add timestamp
-    //     }),
-    //   );
-
-    //   if (response.statusCode == 200) {
-    //     print('Success! Data sent to server.');
-    //     print('Response: ${response.body}');
-    //   } else {
-    //     print('Error: ${response.statusCode}');
-    //     print('Response: ${response.body}');
-    //   }
-    // } catch (e) {
-    //   print('Failed to send data: $e');
-    // }
-  }
-
   Future<String> _callGoogleVisionApi(String base64Image) async {
     const apiUrl =
         'https://vision.googleapis.com/v1/images:annotate?key=$_apiKey';
@@ -124,77 +61,106 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
       ],
     });
 
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: requestBody,
-      );
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: requestBody,
+    );
 
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        return _parseVisionResponse(responseData);
-      } else {
-        throw Exception('API Error: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      throw Exception('Network Error: $e');
+    if (response.statusCode == 200) {
+      return _parseVisionResponse(jsonDecode(response.body));
+    } else {
+      throw Exception('API Error: ${response.statusCode} - ${response.body}');
     }
   }
 
   String _parseVisionResponse(Map<String, dynamic> response) {
-    try {
-      if (response['responses'] == null ||
-          response['responses'][0]['textAnnotations'] == null) {
-        return 'No text found in image';
-      }
-
-      final textAnnotations =
-          response['responses'][0]['textAnnotations'] as List;
-      if (textAnnotations.isEmpty) return 'No text found in image';
-
-      return textAnnotations.first['description'] as String;
-    } catch (e) {
-      throw Exception('Failed to parse response: $e');
+    final textAnnotations = response['responses']?[0]?['textAnnotations'];
+    if (textAnnotations == null || textAnnotations.isEmpty) {
+      return 'No text found in image';
     }
+    return textAnnotations.first['description'] ?? '';
   }
 
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
-
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
         _extractedText = "";
+        // _aiResponse = "";
         _vertexAIResponse = "";
         _events = [];
       });
     }
   }
 
-  List<Map<String, dynamic>> parseEventsFromJson(String jsonString) {
+  List<Event> parseEventsFromJson(String jsonString) {
     try {
       final cleanedString =
           jsonString.replaceAll('```json', '').replaceAll('```', '').trim();
-
       final jsonData = json.decode(cleanedString);
       final eventsList = jsonData['events'] as List;
+
       return eventsList.map((event) {
-        return {
-          'event': event['event'] ?? 'Unknown',
-          'start_date': event['start_date'],
-          'end_date': event['end_date'],
-        };
+        DateTime? parseDate(String? dateStr) {
+          try {
+            return dateStr != null
+                ? DateFormat('dd-MM-yyyy').parse(dateStr)
+                : null;
+          } catch (_) {
+            return null;
+          }
+        }
+
+        return Event(
+          id: event['_id']?.toString() ?? '',
+          title: event['event'] ?? '',
+          startDate: parseDate(event['startDate']) ?? DateTime.now(),
+          endDate: parseDate(event['endDate']) ?? DateTime.now(),
+          // description: event['description'] ?? '',
+          // category: event['category'] ?? '',
+          userId: event['userId'] ?? '',
+          createdAt: parseDate(event['createdAt']) ?? DateTime.now(),
+          updatedAt: parseDate(event['updatedAt']) ?? DateTime.now(),
+        );
       }).toList();
     } catch (e) {
-      print('Error parsing JSON: $e');
+      print('Error parsing events JSON: $e');
       return [];
+    }
+  }
+
+  Future<void> _saveEventsToBackend(List<Event> events) async {
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse('$BASE_URL/add-events'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'events': events.map((e) => e.toMap()).toList()}),
+      );
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Events saved successfully!')));
+      } else {
+        throw Exception('Failed to save events: ${response.body}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error saving events: $e')));
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _extractTextAndEvents() async {
     if (_image == null) return;
+
     if (!_isFirebaseInitialized) {
       setState(() {
         _extractedText = "Error: Firebase not initialized";
@@ -213,7 +179,6 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     try {
       final bytes = await _image!.readAsBytes();
       final base64Image = base64Encode(bytes);
-
       final visionResponse = await _callGoogleVisionApi(base64Image);
       setState(() {
         _extractedText = visionResponse;
@@ -237,23 +202,38 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
         } that is in the format of DD-MM-YYYY and skip the ones where you don't have enoguh confidence""",
       );
 
+      // if (aiResponse.statusCode == 200) {
+      //   final responseData = json.decode(aiResponse.body);
+      //   final events = parseEventsFromJson(responseData['processedText']);
+
+      //   setState(() {
+      //     _events = events;
+      //     _aiResponse = responseData['processedText'];
+      //   });
+      // } else {
+      //   throw Exception('AI processing failed: ${aiResponse.body}');
+      // }
+      // }
       final response = await model.generateContent([prompt]);
       final events = parseEventsFromJson(response.text ?? '{"events": []}');
 
       // await _saveToJsonFile(events);
-      await _saveToFirestore(events);
+      // await _saveToFirestore(events);
 
       setState(() {
         _events = events;
         _vertexAIResponse = response.text ?? "No response from Vertex AI";
+        _extractedText = "Error: ${visionResponse.toString()}";
+        // _vertexAIResponse = "Error processing content: ${e.toString()}";
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _extractedText = "Error: ${e.toString()}";
-        _vertexAIResponse = "Error processing content: ${e.toString()}";
-        _isLoading = false;
+        _extractedText = "Error: $e";
+        _vertexAIResponse = "AI Error: $e";
       });
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -280,43 +260,64 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
             ),
             SizedBox(height: 20),
             if (_image != null)
-              Image.file(_image!, height: 200, fit: BoxFit.contain),
+              Image.file(_image!, height: 200, fit: BoxFit.cover),
             SizedBox(height: 20),
             ElevatedButton(
               onPressed: _isLoading ? null : _extractTextAndEvents,
               child:
                   _isLoading
                       ? CircularProgressIndicator(color: Colors.white)
-                      : Text("Extract Text & Events"),
+                      : Text("Events"),
             ),
             SizedBox(height: 20),
-            // if (_extractedText.isNotEmpty)
-            // _buildCard("Extracted Text", _extractedText),
-            // if (_vertexAIResponse.isNotEmpty)
-            //   _buildCard("Vertex AI Response", _vertexAIResponse),
-            if (_events.isNotEmpty) _buildEventCards(),
+            if (_extractedText.isNotEmpty)
+              Text(
+                "Extracted Text:\n$_extractedText",
+                textAlign: TextAlign.center,
+              ),
+            if (_events.isNotEmpty) ...[
+              SizedBox(height: 20),
+              Text(
+                "Detected Events:",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                itemCount: _events.length,
+                itemBuilder: (context, index) {
+                  final e = _events[index];
+                  return ListTile(
+                    title: Text(e.title),
+                    subtitle: Text(
+                      '${DateFormat('dd MMM yyyy').format(e.startDate)} - ${DateFormat('dd MMM yyyy').format(e.endDate!)}\n}${e.description}',
+                    ),
+                  );
+                },
+              ),
+              ElevatedButton(
+                onPressed:
+                    _isLoading ? null : () => _saveEventsToBackend(_events),
+                child: Text("Save Events"),
+              ),
+            ],
+            FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditEventScreen(editing: false),
+                  ),
+                );
+              },
+              child: Icon(Icons.add),
+              tooltip: "Add Event Manually",
+            ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildCard(String title, String content) => Card(
-    child: Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          SizedBox(height: 8),
-          SelectableText(content),
-        ],
-      ),
-    ),
-  );
 
   Widget _buildEventCards() => Column(
     children: [
@@ -326,15 +327,20 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
       ),
       SizedBox(height: 8),
       ..._events.map(
-        (e) => Card(
+        (event) => Card(
           margin: EdgeInsets.symmetric(vertical: 4),
           child: ListTile(
-            title: Text(e['event']),
+            title: Text(event.name),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Start: ${e['start_date']}"),
-                Text("End: ${e['end_date']}"),
+                Text(
+                  "Start: ${DateFormat('dd-MM-yyyy').format(event.start_date)}",
+                ),
+                if (event.end_date != null)
+                  Text(
+                    "End: ${DateFormat('dd-MM-yyyy').format(event.end_date!)}",
+                  ),
               ],
             ),
             trailing: IconButton(
@@ -343,10 +349,17 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => EditEventScreen(event: e),
+                    builder: (context) => EditEventScreen(event: event),
                   ),
                 ).then((updatedEvent) {
-                  // Handle the updated event data here
+                  if (updatedEvent != null) {
+                    setState(() {
+                      final index = _events.indexWhere(
+                        (e) => e.id == updatedEvent.id,
+                      );
+                      if (index != -1) _events[index] = updatedEvent;
+                    });
+                  }
                 });
               },
             ),

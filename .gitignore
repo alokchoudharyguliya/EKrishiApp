@@ -2,3 +2,4 @@
 .env
 /NewsCalendar/build/
 *.json
+/node_modules/

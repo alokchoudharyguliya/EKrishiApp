@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'edit_prodile_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -11,24 +11,62 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  late User _user;
   Map<String, dynamic>? _userData;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _user = _auth.currentUser!;
     _fetchUserData();
   }
 
   Future<void> _fetchUserData() async {
-    DocumentSnapshot userDoc =
-        await _firestore.collection('users').doc(_user.uid).get();
     setState(() {
-      _userData = userDoc.data() as Map<String, dynamic>?;
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    try {
+      // TODO: Replace with your Express backend endpoint
+
+      final response = await http.get(
+        Uri.parse('https://your-express-api.com/user/profile'),
+        headers: {
+          // 'Authorization': 'Bearer YOUR_AUTH_TOKEN', // Add if using JWT
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _userData = data;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load profile data';
+        });
+      }
+      // */
+
+      // Mock data for demonstration - remove in production
+      await Future.delayed(Duration(seconds: 1)); // Simulate network delay
+      setState(() {
+        _userData = {
+          'name': 'John Doe',
+          'email': 'john@example.com',
+          'phone': '123-456-7890',
+          'photoUrl': null,
+        };
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading profile: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -40,19 +78,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EditProfileScreen(userData: _userData),
-                ),
-              );
+              if (_userData != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => EditProfileScreen(userData: _userData!),
+                  ),
+                ).then((_) => _fetchUserData()); // Refresh after editing
+              }
             },
           ),
         ],
       ),
       body:
-          _userData == null
+          _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+              ? Center(child: Text(_errorMessage!))
               : Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -76,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Email: ${_user.email}',
+                      'Email: ${_userData!['email'] ?? 'Not provided'}',
                       style: const TextStyle(fontSize: 18),
                     ),
                     const SizedBox(height: 10),

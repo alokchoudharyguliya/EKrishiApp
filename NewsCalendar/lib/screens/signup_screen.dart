@@ -1,170 +1,12 @@
-// import 'package:flutter/material.dart';
-// import 'calendar_screen.dart';
-
-// class SignupScreen extends StatefulWidget {
-//   @override
-//   _SignupScreenState createState() => _SignupScreenState();
-// }
-
-// class _SignupScreenState extends State<SignupScreen> {
-//   final _formKey = GlobalKey<FormState>();
-//   final _nameController = TextEditingController();
-//   final email = TextEditingController();
-//   final password = TextEditingController();
-//   final confirmPassword = TextEditingController();
-//   bool _isLoading = false;
-
-//   @override
-//   void dispose() {
-//     _nameController.dispose();
-//     email.dispose();
-//     password.dispose();
-//     confirmPassword.dispose();
-//     super.dispose();
-//   }
-
-//   Future<void> _signup() async {
-//     if (_formKey.currentState!.validate()) {
-//       setState(() => _isLoading = true);
-
-//       // Simulate network delay
-//       await Future.delayed(Duration(seconds: 2));
-
-//       // In a real app, you would call your signup API here
-//       Navigator.pushReplacement(
-//         context,
-//         MaterialPageRoute(builder: (context) => CalendarScreen()),
-//       );
-
-//       setState(() => _isLoading = false);
-//     }
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(title: Text('Sign Up')),
-//       body: Center(
-//         child: SingleChildScrollView(
-//           padding: EdgeInsets.all(24),
-//           child: Column(
-//             mainAxisAlignment: MainAxisAlignment.center,
-//             children: [
-//               FlutterLogo(size: 80),
-//               SizedBox(height: 30),
-//               Text(
-//                 'Create Account',
-//                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-//               ),
-//               SizedBox(height: 20),
-//               Form(
-//                 key: _formKey,
-//                 child: Column(
-//                   children: [
-//                     TextFormField(
-//                       controller: _nameController,
-//                       decoration: InputDecoration(
-//                         labelText: 'Full Name',
-//                         prefixIcon: Icon(Icons.person),
-//                         border: OutlineInputBorder(),
-//                       ),
-//                       validator: (value) {
-//                         if (value == null || value.isEmpty) {
-//                           return 'Please enter your name';
-//                         }
-//                         return null;
-//                       },
-//                     ),
-//                     SizedBox(height: 16),
-//                     TextFormField(
-//                       controller: email,
-//                       decoration: InputDecoration(
-//                         labelText: 'Email',
-//                         prefixIcon: Icon(Icons.email),
-//                         border: OutlineInputBorder(),
-//                       ),
-//                       keyboardType: TextInputType.emailAddress,
-//                       validator: (value) {
-//                         if (value == null || value.isEmpty) {
-//                           return 'Please enter your email';
-//                         }
-//                         if (!value.contains('@')) {
-//                           return 'Please enter a valid email';
-//                         }
-//                         return null;
-//                       },
-//                     ),
-//                     SizedBox(height: 16),
-//                     TextFormField(
-//                       controller: password,
-//                       decoration: InputDecoration(
-//                         labelText: 'Password',
-//                         prefixIcon: Icon(Icons.lock),
-//                         border: OutlineInputBorder(),
-//                       ),
-//                       obscureText: true,
-//                       validator: (value) {
-//                         if (value == null || value.isEmpty) {
-//                           return 'Please enter your password';
-//                         }
-//                         if (value.length < 6) {
-//                           return 'Password must be at least 6 characters';
-//                         }
-//                         return null;
-//                       },
-//                     ),
-//                     SizedBox(height: 16),
-//                     TextFormField(
-//                       controller: confirmPassword,
-//                       decoration: InputDecoration(
-//                         labelText: 'Confirm Password',
-//                         prefixIcon: Icon(Icons.lock),
-//                         border: OutlineInputBorder(),
-//                       ),
-//                       obscureText: true,
-//                       validator: (value) {
-//                         if (value != password.text) {
-//                           return 'Passwords do not match';
-//                         }
-//                         return null;
-//                       },
-//                     ),
-//                     SizedBox(height: 24),
-//                     SizedBox(
-//                       width: double.infinity,
-//                       height: 50,
-//                       child: ElevatedButton(
-//                         onPressed: _isLoading ? null : _signup,
-//                         child:
-//                             _isLoading
-//                                 ? CircularProgressIndicator(color: Colors.white)
-//                                 : Text('SIGN UP'),
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//               SizedBox(height: 20),
-//               TextButton(
-//                 onPressed: () {
-//                   Navigator.pop(context);
-//                 },
-//                 child: Text('Already have an account? Login'),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:newscalendar/constants/constants.dart';
 import 'package:provider/provider.dart';
-import '../auth_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:firebase_auth/firebase_auth.dart';
+import '../auth_form_provider.dart';
+import 'package:newscalendar/auth_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -178,6 +20,16 @@ class _SignupScreenState extends State<SignupScreen> {
   final confirmPassword = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final authForm = Provider.of<AuthFormProvider>(context, listen: false);
+    email.text = authForm.email;
+    password.text = authForm.password;
+  }
 
   @override
   void dispose() {
@@ -187,9 +39,7 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  // ... other imports
-
-  signup() async {
+  Future<void> signup() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (password.text != confirmPassword.text) {
@@ -205,37 +55,41 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
-      // Encrypt the password (using SHA-256 for demonstration, consider better encryption for production)
-      var bytes = utf8.encode(password.text); // data being hashed
+      var bytes = utf8.encode(password.text.trim());
       var encryptedPassword = sha256.convert(bytes).toString();
 
-      // Prepare user data
       final userData = {
-        'email': email.text,
+        'email': email.text.trim(),
         'password': encryptedPassword,
-        'name': 'Alok',
       };
 
-      // 'name': name.text, // assuming you have a name field
-      // Make POST request to your Node.js endpoint
       final response = await http.post(
-        Uri.parse('https://localhost:3000/signup'),
+        Uri.parse('$BASE_URL/signup'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(userData),
       );
 
       final responseData = json.decode(response.body);
 
-      if (response.statusCode == 200) {
-        // Success - user created in Firebase and Firestore
+      if (response.statusCode == 201) {
+        var myToken = responseData['token'];
+        final authService = Provider.of<AuthService>(context, listen: false);
+        await authService.setAuthToken(myToken);
+        await FlutterSecureStorage().write(
+          key: 'userEmail',
+          value: email.text.trim(),
+        );
+        Provider.of<AuthFormProvider>(context, listen: false).clear();
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        // Handle error from your backend
         setState(() {
           _errorMessage = responseData['message'] ?? 'Signup failed';
-          _isLoading = false;
         });
       }
+
+      setState(() {
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'An error occurred. Please try again.';
@@ -244,146 +98,137 @@ class _SignupScreenState extends State<SignupScreen> {
       print(e);
     }
   }
-  // signup() async {
-  //   if (!_formKey.currentState!.validate()) return;
-
-  //   if (password.text != confirmPassword.text) {
-  //     setState(() {
-  //       _errorMessage = 'Passwords do not match';
-  //     });
-  //     return;
-  //   }
-
-  //   setState(() {
-  //     _isLoading = true;
-  //     _errorMessage = null;
-  //   });
-
-  //   try {
-  //     await FirebaseAuth.instance.createUserWithEmailAndPassword(
-  //       email: email.text,
-  //       password: password.text,
-  //     );
-  //     Navigator.pushReplacementNamed(context, '/home');
-  //   } on FirebaseAuthException catch (e) {
-  //     // setState(() {
-  //     //   _errorMessage = e.toString() + "ABC";
-  //     //   _isLoading = false;
-  //     // });
-  //     if (e.code == 'weak-password') {
-  //       print('The password provided is too weak.');
-  //     } else if (e.code == 'email-already-in-use') {
-  //       print('The account already exists for that email.');
-  //     }
-  //   } catch (e) {
-  //     print(e);
-  //   }
-  // }
-
-  // signup() async {
-  //   if (!_formKey.currentState!.validate()) return;
-
-  //   if (password.text != confirmPassword.text) {
-  //     setState(() {
-  //       _errorMessage = 'Passwords do not match';
-  //     });
-  //     return;
-  //   }
-
-  //   setState(() {
-  //     _isLoading = true;
-  //     _errorMessage = null;
-  //   });
-
-  //   try {
-  //     final credential = await FirebaseAuth.instance
-  //         .createUserWithEmailAndPassword(
-  //           email: email.text.trim(),
-  //           password: password.text.trim(),
-  //         );
-
-  //     if (credential.user != null) {
-  //       Navigator.pushReplacementNamed(context, '/home');
-  //     }
-  //   } on FirebaseAuthException catch (e) {
-  //     setState(() {
-  //       _errorMessage = e.message ?? 'Signup failed';
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() {
-  //       // _errorMessage = 'An unexpected error occurred';
-  //       _isLoading = false;
-  //     });
-  //   }
-  // }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Sign Up')),
+      appBar: AppBar(title: const Text('Sign Up')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextFormField(
-                controller: email,
-                decoration: InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16),
-              TextFormField(
-                controller: password,
-                decoration: InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your password';
-                  }
-                  if (value.length < 6) {
-                    return 'Password must be at least 6 characters';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16),
-              TextFormField(
-                controller: confirmPassword,
-                decoration: InputDecoration(labelText: 'Confirm Password'),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please confirm your password';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 24),
-              if (_errorMessage != null)
-                Text(_errorMessage!, style: TextStyle(color: Colors.red)),
-              SizedBox(height: 16),
-              _isLoading
-                  ? CircularProgressIndicator()
-                  : ElevatedButton(
-                    onPressed: (() => {signup()}),
-                    child: Text('Sign Up'),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextFormField(
+                  controller: email,
+                  onChanged: (value) {
+                    Provider.of<AuthFormProvider>(
+                      context,
+                      listen: false,
+                    ).updateEmail(value);
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email),
                   ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                child: Text('Already have an account? Login'),
-              ),
-            ],
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: password,
+                  onChanged: (value) {
+                    Provider.of<AuthFormProvider>(
+                      context,
+                      listen: false,
+                    ).updatePassword(value);
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: _obscurePassword,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your password';
+                    }
+                    if (value.length < 8) {
+                      return 'Password must be at least 8 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: confirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: _obscureConfirmPassword,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please confirm your password';
+                    }
+                    if (value != password.text) {
+                      return 'Passwords do not match';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                if (_errorMessage != null)
+                  Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                const SizedBox(height: 16),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                      onPressed: signup,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                      child: const Text('Sign Up'),
+                    ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  },
+                  child: const Text('Already have an account? Login'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

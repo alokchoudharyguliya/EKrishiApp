@@ -1,56 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:newscalendar/screens/calendar_screen.dart';
-import 'package:newscalendar/screens/edit_prodile_screen.dart';
-import 'package:newscalendar/screens/profile_screen.dart';
+import '/screens/profile_screen.dart';
 import 'package:newscalendar/screens/settings.dart';
 import 'package:newscalendar/wrapper.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
-import 'screens/login.dart';
 import './homepage.dart';
 import './screens/signup_screen.dart';
-import 'package:firebase_core/firebase_core.dart';
 import './screens/upload.dart';
-// import '../firebase_options.dart';
-import './screens/settings.dart';
+import './screens/login_screen.dart';
+import 'auth_form_provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+class UserService {
+  final FlutterSecureStorage _storage = FlutterSecureStorage();
+
+  Future<String?> getUserId() async {
+    return await _storage.read(key: 'userId');
+  }
+
+  Future<void> setUserId(String userId) async {
+    await _storage.write(key: 'userId', value: userId);
+  }
+
+  Future<void> clearUserData() async {
+    await _storage.delete(key: 'userId');
+    await _storage.delete(key: 'userEmail');
+  }
+}
 
 void main() async {
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  final storage = FlutterSecureStorage();
+
   runApp(
-    ChangeNotifierProvider(create: (context) => AuthService(), child: MyApp()),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => AuthService(storage: storage),
+        ),
+        Provider(create: (_) => UserService()), // Add this
+        ChangeNotifierProvider(create: (context) => AuthFormProvider()),
+      ],
+      child: const MyApp(),
+    ),
   );
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Firebase Auth Demo',
+      title: 'App Name',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: Wrapper(),
-      // home: FutureBuilder(
-      //   future:
-      //       Provider.of<AuthService>(context, listen: false).checkLoginStatus(),
-      //   builder: (context, snapshot) {
-      //     if (snapshot.connectionState == ConnectionState.done) {
-      //       return snapshot.data == true ? HomeScreen() : LoginScreen();
-      //     }
-      //     return Scaffold(body: Center(child: CircularProgressIndicator()));
-      //   },
-      // ),
+      home: const Wrapper(),
       routes: {
-        '/login': (context) => Login(),
+        '/login': (context) => const Login(),
         '/signup': (context) => SignupScreen(),
-        '/home': (context) => Homepage(),
+        '/home': (context) => const Homepage(),
         '/calendar': (context) => FullScreenCalendar(),
         '/upload-schedule': (context) => ImageUploadScreen(),
-        // '/edit-profile': (context) => EditProfileScreen(userData: userData),
-        '/profile': (context) => ProfileScreen(),
+        '/profile': (context) => const ProfileScreen(),
         '/settings': (context) => SettingsPage(),
       },
     );

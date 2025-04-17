@@ -1,305 +1,95 @@
-// // class AuthService {
-// //   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-// //   Future<User?> signUpWithEmail(String email, String password) async {
-// //     try {
-// //       UserCredential result = await _auth.createUserWithEmailAndPassword(
-// //         email: email,
-// //         password: password,
-// //       );
-// //       return result.user;
-// //     } catch (e) {
-// //       print("SignUp Error: $e");
-// //       return null;
-// //     }
-// //   }
-// // }
-
-// import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:flutter/material.dart';
-// import 'package:shared_preferences/shared_preferences.dart';
-
-// class AuthService with ChangeNotifier {
-//   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-//   late SharedPreferences _prefs;
-
-//   // Initialize SharedPreferences
-//   Future<void> init() async {
-//     _prefs = await SharedPreferences.getInstance();
-//   }
-
-//   // Get current user
-//   // User? get currentUser => _firebaseAuth.currentUser;
-//   User? get currentUser {
-//     try {
-//       return _firebaseAuth.currentUser;
-//     } catch (e) {
-//       print('Error getting current user: $e');
-//       return null;
-//     }
-//   }
-
-//   // Check if user is logged in
-//   bool get isLoggedIn => currentUser != null;
-
-//   // Get auth token
-//   Future<String?> getToken() async {
-//     return await currentUser?.getIdToken();
-//   }
-
-//   // Sign up with email and password
-//   Future<User?> signUp(String email, String password) async {
-//     try {
-//       UserCredential credential = await _firebaseAuth
-//           .createUserWithEmailAndPassword(email: email, password: password);
-
-//       // Save login state
-//       await _prefs.setBool('isLoggedIn', true);
-//       await _prefs.setString('email', email);
-
-//       notifyListeners();
-//       return credential.user;
-//     } on FirebaseAuthException catch (e) {
-//       throw _handleAuthException(e);
-//     }
-//   }
-
-//   // // Sign in with email and password
-//   // Future<User?> signIn(String email, String password) async {
-//   //   try {
-//   //     UserCredential credential = await _firebaseAuth
-//   //         .signInWithEmailAndPassword(email: email, password: password);
-
-//   //     // Save login state
-//   //     await _prefs.setBool('isLoggedIn', true);
-//   //     await _prefs.setString('email', email);
-
-//   //     notifyListeners();
-//   //     return credential.user;
-//   //   } on FirebaseAuthException catch (e) {
-//   //     throw _handleAuthException(e);
-//   //   }
-//   // }
-//   Future<User?> signIn(String email, String password) async {
-//     try {
-//       UserCredential credential = await _firebaseAuth
-//           .signInWithEmailAndPassword(email: email, password: password);
-
-//       // Explicitly get the user rather than relying on credential.user
-//       User? user = _firebaseAuth.currentUser;
-
-//       if (user != null) {
-//         await _prefs.setBool('isLoggedIn', true);
-//         await _prefs.setString('email', email);
-//         notifyListeners();
-//         return user;
-//       }
-//       return null;
-//     } on FirebaseAuthException catch (e) {
-//       throw _handleAuthException(e);
-//     }
-//   }
-
-//   // Sign out
-//   Future<void> signOut() async {
-//     await _firebaseAuth.signOut();
-
-//     // Clear saved login state
-//     await _prefs.setBool('isLoggedIn', false);
-//     await _prefs.remove('email');
-
-//     notifyListeners();
-//   }
-
-//   // Check if user is logged in from SharedPreferences
-//   Future<bool> checkLoginStatus() async {
-//     await init();
-//     bool isLoggedIn = _prefs.getBool('isLoggedIn') ?? false;
-
-//     // If SharedPreferences says user is logged in but Firebase doesn't have a user,
-//     // sign out to keep them in sync
-//     if (isLoggedIn && _firebaseAuth.currentUser == null) {
-//       await _prefs.setBool('isLoggedIn', false);
-//       return false;
-//     }
-
-//     return isLoggedIn;
-//   }
-
-//   // Handle Firebase auth exceptions
-//   String _handleAuthException(FirebaseAuthException e) {
-//     switch (e.code) {
-//       case 'invalid-email':
-//         return 'The email address is badly formatted.';
-//       case 'user-disabled':
-//         return 'This user has been disabled.';
-//       case 'user-not-found':
-//         return 'No user found with this email.';
-//       case 'wrong-password':
-//         return 'Wrong password provided.';
-//       case 'email-already-in-use':
-//         return 'The email address is already in use.';
-//       case 'operation-not-allowed':
-//         return 'Email/password accounts are not enabled.';
-//       case 'weak-password':
-//         return 'The password is too weak.';
-//       default:
-//         return 'An unknown error occurred.';
-//     }
-//   }
-// }
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService with ChangeNotifier {
-  final FirebaseAuth _firebaseAuth;
-  late SharedPreferences _prefs;
-  bool _initialized = false;
+  final FlutterSecureStorage _storage;
+  String? _token;
+  bool _isLoading = true;
+  bool _isAuthenticated = false;
+  DateTime? _tokenExpiry;
 
-  AuthService({FirebaseAuth? firebaseAuth})
-    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+  AuthService({FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
 
-  // Initialize SharedPreferences and Firebase Auth
-  Future<void> init() async {
-    try {
-      _prefs = await SharedPreferences.getInstance();
-      // Force a current user check to initialize auth state
-      await _firebaseAuth.authStateChanges().first;
-      _initialized = true;
-    } catch (e) {
-      print('Initialization error: $e');
-      rethrow;
+  String? get token => _token;
+  bool get isLoading => _isLoading;
+  bool get isAuthenticated => _isAuthenticated;
+  bool get isTokenValid =>
+      _token != null &&
+      (_tokenExpiry == null || _tokenExpiry!.isAfter(DateTime.now()));
+
+  Future<String?> getAuthToken() async {
+    if (_token != null && isTokenValid) {
+      return _token;
     }
-  }
 
-  // Get current user with null check and error handling
-  User? get currentUser {
-    if (!_initialized) return null;
+    // If token is expired or not in memory, try to get from storage
     try {
-      return _firebaseAuth.currentUser;
-    } catch (e) {
-      print('Error getting current user: $e');
-      return null;
-    }
-  }
+      _token = await _storage.read(key: 'token');
+      final expiryString = await _storage.read(key: 'token_expiry');
 
-  bool get isLoggedIn => currentUser != null;
-
-  Future<String?> getToken() async {
-    if (!_initialized) return null;
-    try {
-      return await currentUser?.getIdToken();
-    } catch (e) {
-      print('Error getting token: $e');
-      return null;
-    }
-  }
-
-  Future<User?> signUp(String email, String password) async {
-    if (!_initialized) await init();
-    try {
-      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // Use the user from auth instance rather than credential
-      final user = _firebaseAuth.currentUser;
-      if (user != null) {
-        await _prefs.setBool('isLoggedIn', true);
-        await _prefs.setString('email', email);
-        notifyListeners();
-        return user;
+      if (expiryString != null) {
+        _tokenExpiry = DateTime.parse(expiryString);
       }
-      return null;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
+
+      _isAuthenticated = _token != null && isTokenValid;
+      notifyListeners();
+
+      return _isAuthenticated ? _token : null;
     } catch (e) {
-      print('Sign up error: $e');
-      throw 'Failed to sign up. Please try again.';
+      _token = null;
+      _tokenExpiry = null;
+      _isAuthenticated = false;
+      notifyListeners();
+      return null;
     }
   }
 
-  Future<User?> signIn(String email, String password) async {
-    if (!_initialized) await init();
+  Future<void> checkAuthStatus() async {
     try {
-      await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      _isLoading = true;
+      notifyListeners();
 
-      // Get user directly from auth instance
-      final user = _firebaseAuth.currentUser;
-      if (user != null) {
-        await _prefs.setBool('isLoggedIn', true);
-        await _prefs.setString('email', email);
-        notifyListeners();
-        return user;
-      }
-      return null;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
-    } catch (e) {
-      // throw ('Sign in error: $e');
-      throw 'Failed to sign in. Please try again.';
-    }
-  }
+      await getAuthToken(); // This will update all the necessary states
 
-  Future<void> signOut() async {
-    try {
-      await _firebaseAuth.signOut();
-      await _prefs.setBool('isLoggedIn', false);
-      await _prefs.remove('email');
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
-      print('Sign out error: $e');
+      _token = null;
+      _tokenExpiry = null;
+      _isAuthenticated = false;
+      _isLoading = false;
+      notifyListeners();
       rethrow;
     }
   }
 
-  Future<bool> checkLoginStatus() async {
-    if (!_initialized) await init();
-    try {
-      final isLoggedIn = _prefs.getBool('isLoggedIn') ?? false;
+  Future<void> setAuthToken(String token, {Duration? expiresIn}) async {
+    _token = token;
+    _isAuthenticated = true;
 
-      // Verify the auth state matches the preference
-      if (isLoggedIn) {
-        await _firebaseAuth.authStateChanges().first;
-        if (_firebaseAuth.currentUser == null) {
-          await _prefs.setBool('isLoggedIn', false);
-          return false;
-        }
-        return true;
-      }
-      return false;
-    } catch (e) {
-      print('Check login status error: $e');
-      return false;
+    if (expiresIn != null) {
+      _tokenExpiry = DateTime.now().add(expiresIn);
+      await _storage.write(
+        key: 'token_expiry',
+        value: _tokenExpiry!.toIso8601String(),
+      );
     }
+
+    await _storage.write(key: 'token', value: token);
+    notifyListeners();
   }
 
-  String _handleAuthException(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'invalid-email':
-        return 'The email address is badly formatted.';
-      case 'user-disabled':
-        return 'This user has been disabled.';
-      case 'user-not-found':
-        return 'No user found with this email.';
-      case 'wrong-password':
-        return 'Wrong password provided.';
-      case 'email-already-in-use':
-        return 'The email address is already in use.';
-      case 'operation-not-allowed':
-        return 'Email/password accounts are not enabled.';
-      case 'weak-password':
-        return 'The password is too weak.';
-      case 'network-request-failed':
-        return 'Network error. Please check your connection.';
-      default:
-        return 'An unknown error occurred: ${e.message}';
-    }
+  Future<void> logout() async {
+    await Future.wait([
+      _storage.delete(key: 'token'),
+      _storage.delete(key: 'token_expiry'),
+      _storage.delete(key: 'userEmail'),
+    ]);
+
+    _token = null;
+    _tokenExpiry = null;
+    _isAuthenticated = false;
+    notifyListeners();
   }
 }

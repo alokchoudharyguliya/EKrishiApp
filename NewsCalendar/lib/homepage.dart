@@ -1,12 +1,17 @@
+import 'package:newscalendar/constants/constants.dart';
+
 import './screens/profile_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import './auth_service.dart';
-import './screens/settings.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'auth_service.dart';
+import 'package:provider/provider.dart';
+import 'main.dart';
 
 class Homepage extends StatefulWidget {
-  const Homepage({super.key});
+  final String? token;
+  const Homepage({@required this.token, Key? key}) : super(key: key);
 
   @override
   State<Homepage> createState() => _HomepageState();
@@ -14,14 +19,57 @@ class Homepage extends StatefulWidget {
 
 class _HomepageState extends State<Homepage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final user = FirebaseAuth.instance.currentUser;
+  String? userEmail;
   final DateTime _today = DateTime.now();
+  String? authToken;
 
-  signout() async {
-    await FirebaseAuth.instance
-        .signOut()
-        .then((value) => {Navigator.pushReplacementNamed(context, '/login')})
-        .catchError((err) => {throw err});
+  @override
+  void initState() {
+    super.initState();
+    // Initialize authToken from widget.token
+    authToken = widget.token;
+    Provider.of<AuthService>(context, listen: false).checkAuthStatus();
+  }
+
+  Future<void> signout() async {
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final userService = Provider.of<UserService>(context, listen: false);
+
+      // Attempt server logout if we have a token
+      if (authService.token != null) {
+        try {
+          final response = await http.post(
+            Uri.parse('$BASE_URL/logout'),
+            headers: {
+              'Authorization': 'Bearer ${authService.token}',
+              'Content-Type': 'application/json',
+            },
+          );
+
+          if (response.statusCode != 200) {
+            print('Server logout failed, but proceeding with client cleanup');
+          }
+        } catch (e) {
+          print('Error contacting logout endpoint: $e');
+        }
+      }
+
+      // Perform client-side cleanup
+      // await authService.clearAuthToken();
+      await authService.logout();
+      await userService.clearUserData();
+      // Navigate to login screen
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } catch (e) {
+      print('Error during logout: $e');
+      // Ensure we still clean up and navigate even if something fails
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    }
   }
 
   void _showDateBottomSheet(BuildContext context) {
@@ -82,13 +130,7 @@ class _HomepageState extends State<Homepage> {
           onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await signout();
-              Navigator.pushReplacementNamed(context, '/login');
-            },
-          ),
+          IconButton(icon: const Icon(Icons.logout), onPressed: signout),
         ],
       ),
       endDrawer: Drawer(
@@ -97,7 +139,7 @@ class _HomepageState extends State<Homepage> {
           children: [
             DrawerHeader(
               decoration: BoxDecoration(color: Theme.of(context).primaryColor),
-              child: Text(
+              child: const Text(
                 'Menu Options',
                 style: TextStyle(color: Colors.white, fontSize: 24),
               ),
@@ -113,11 +155,12 @@ class _HomepageState extends State<Homepage> {
               leading: const Icon(Icons.person),
               title: const Text('Profile'),
               onTap: () {
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ProfileScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileScreen(),
+                  ),
                 );
-                // Navigator.pop(context);
               },
             ),
             ListTile(
@@ -156,7 +199,7 @@ class _HomepageState extends State<Homepage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Welcome, ${user!.email}'),
+            Text('Welcome, ${userEmail ?? "User"}'), // Show email or fallback
             const SizedBox(height: 20),
             Text(
               'Today is ${DateFormat.MMMMEEEEd().format(_today)}',
