@@ -18,10 +18,10 @@ const MongoDBStore = require('connect-mongodb-session')(session);
 const fs = require('fs');
 
 // Configuration
-const MONGODB_URI = "mongodb://localhost:27017/calendar";
+// const MONGODB_URI = "mongodb://localhost:27017/calendar";
 // const SECRET_KEY = ""; // Replace with your actual secret key
-const BASE_URL = 'http://192.168.194.15:3000';
-const WEB_SOCK = 'ws://192.168.194.15:3000';
+// const BASE_URL = 'http://192.168.194.15:3000';
+// const WEB_SOCK = 'ws://192.168.194.15:3000';
 const app = express();
 const server = http.createServer(app);
 
@@ -451,7 +451,7 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
 
             const fileExt = path.extname(req.file.originalname);
             let filename = `${req.file.filename}`;
-            updateData.photoUrl = `${BASE_URL}/profile/${req.file.originalname}`;
+            updateData.photoUrl = `${process.env.BASE_URL}/profile/${req.file.originalname}`;
             filename = `${req.file.originalname}`;
             const filePath = path.join(uploadDir, filename);
 
