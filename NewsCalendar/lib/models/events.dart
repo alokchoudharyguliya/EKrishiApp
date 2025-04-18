@@ -57,7 +57,7 @@ class Event {
 
   Event copyWith({
     String? id,
-    String? name,
+    String? title,
     DateTime? startDate,
     DateTime? endDate,
     String? description,
@@ -67,10 +67,26 @@ class Event {
       updatedAt: updatedAt,
       userId: userId,
       id: id ?? this.id,
-      title: title,
+      title: title ?? this.title,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       description: description ?? this.description,
     );
   }
+
+  // Static copy method
+  static Event copy(Event other) {
+    return Event(
+      createdAt: other.createdAt,
+      updatedAt: other.updatedAt,
+      id: other.id,
+      userId: other.userId,
+      title: other.title,
+      startDate: other.startDate,
+      description: other.description,
+    );
+  }
+
+  // In your Event model
+  String get uniqueId => id ?? DateTime.now().millisecondsSinceEpoch.toString();
 }

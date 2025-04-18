@@ -1,9 +1,14 @@
 const mongoose = require('mongoose');
 const User = require('../models/user');
 const bcrypt = require('bcryptjs');
-const jwt=require('jsonwebtoken');
-const dotenv=require("dotenv");
+const jwt = require('jsonwebtoken');
+const dotenv = require("dotenv");
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 dotenv.config();
+const BASE_URL= 'http://192.168.194.15:3000';
+// Configure multer for local storage
 exports.postSignUp = async (req, res, next) => {
   const email = req.body.email;
   const password = req.body.password;
@@ -20,12 +25,12 @@ exports.postSignUp = async (req, res, next) => {
       password: password
     });
     const token = jwt.sign(
-      { id: user._id, email},
+      { id: user._id, email },
       process.env.JWT_SECRET
-  );
+    );
     console.log('Signed Up successful');
     await user.save();
-    res.status(201).json({ message: "Sign Up Successful",token:token });
+    return res.status(201).json({ message: "Sign Up Successful", token: token, user: user });
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "An error occurred during sign up" });
@@ -44,11 +49,11 @@ exports.postLogIn = async (req, res, next) => {
     const token = jwt.sign(
       { id: user._id, email },
       process.env.JWT_SECRET
-  );
+    );
     if (password === user.password) {
-      return res.status(200).json({ message: "Log In Successful",token:token,userId:user._id });
+      return res.status(200).json({ message: "Log In Successful", token: token, user: user });
     }
-    return res.status(422).json({ message: "Invalid Password" ,token:token,userId:user._id});
+    return res.status(422).json({ message: "Invalid Password" });
 
   } catch (err) {
     console.error(err);
@@ -82,3 +87,56 @@ exports.postLogOut = async (req, res, next) => {
     res.status(500).json({ message: "An error occurred during logout" });
   }
 };
+exports.userData = async (req, res, next) => {
+  const { userId } = req.body;
+  // console.log(req.body);
+  try {
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
+
+    await User.find({ _id:userId }).then(userData=>{
+      // console.log(userData);
+      res.status(200).json({ success: true, userData:userData });
+
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+}
+
+// exports.saveUserData = async (req, res) => 
+
+// exports.saveUserData = async (req, res, next) => {
+//   const { userId } = req.body;
+//   const newUserData = req.body.userData;
+  
+//   try {
+//     if (!userId) {
+//       return res.status(400).json({ message: "User ID is required." });
+//     }
+
+//     // Find the user by ID and update their data
+//     const updatedUser = await User.findByIdAndUpdate(
+//       userId,
+//       { $set: newUserData },
+//       { new: true } // Return the updated document
+//     );
+
+//     if (!updatedUser) {
+//       return res.status(404).json({ message: "User not found." });
+//     }
+
+//     res.status(200).json({ 
+//       success: true, 
+//       user: updatedUser 
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// }

@@ -68,8 +68,8 @@ class _LoginState extends State<Login> {
       if (response.statusCode == 200) {
         final myToken = responseData['token'];
         final userId =
-            responseData['userId']; // Make sure your API returns this
-
+            responseData["user"]['_id']; // Make sure your API returns this
+        print(userId);
         // Store authentication data
         final authService = Provider.of<AuthService>(context, listen: false);
         await authService.setAuthToken(myToken);

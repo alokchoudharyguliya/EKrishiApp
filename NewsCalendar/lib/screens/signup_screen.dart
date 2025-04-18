@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../auth_form_provider.dart';
 import 'package:newscalendar/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:newscalendar/main.dart';
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -73,6 +74,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
       if (response.statusCode == 201) {
         var myToken = responseData['token'];
+        final userId =
+            responseData['userId']; // Make sure your API returns this
+        print(userId);
+
+        // Store user data using UserService
+        final userService = Provider.of<UserService>(context, listen: false);
+        await userService.setUserId(userId);
         final authService = Provider.of<AuthService>(context, listen: false);
         await authService.setAuthToken(myToken);
         await FlutterSecureStorage().write(

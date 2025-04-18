@@ -3,8 +3,8 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const { getAuth, createUserWithEmailAndPassword } = require('firebase/auth');
 const { initializeApp } = require('firebase/app');
+const upload = require('../config/multerConfig');
 const userController=require('../controllers/userControllers');
-// Initialize Firebase Admin (for Firestore)
 const serviceAccount = require('../newscalendar-ac03a-firebase-adminsdk-fbsvc-ceee853a90.json');
 // admin.initializeApp({
 //   credential: admin.credential.cert(serviceAccount),
@@ -28,4 +28,7 @@ const auth = getAuth(firebaseApp);
 router.post('/signup',userController.postSignUp);
 router.post('/login',userController.postLogIn);
 router.post('/logout',userController.postLogOut);
+router.post('/get-user',userController.userData);
+// router.post('/save-user', upload.single('image'),userController.saveUserData);
+// router.post,('/upload-profile-photo',userController.uploadProfilePhoto);
 module.exports = router;

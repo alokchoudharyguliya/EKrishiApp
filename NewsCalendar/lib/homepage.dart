@@ -121,113 +121,131 @@ class _HomepageState extends State<Homepage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        title: const Text("Home"),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.logout), onPressed: signout),
-        ],
-      ),
-      endDrawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Theme.of(context).primaryColor),
-              child: const Text(
-                'Menu Options',
-                style: TextStyle(color: Colors.white, fontSize: 24),
-              ),
+    final userService = Provider.of<UserService>(context);
+
+    return FutureBuilder(
+      future:
+          userService
+              .getUserData(), // This will rebuild when notifyListeners() is called
+      builder: (context, snapshot) {
+        Map<String, dynamic> userData = {};
+        if (snapshot.hasData) {
+          userData = snapshot.data as Map<String, dynamic>;
+        }
+
+        return Scaffold(
+          key: _scaffoldKey,
+          appBar: AppBar(
+            title: const Text("Home"),
+            leading: IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: const Text('Profile'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileScreen(),
+            actions: [
+              IconButton(icon: const Icon(Icons.logout), onPressed: signout),
+            ],
+          ),
+          endDrawer: Drawer(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                DrawerHeader(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
                   ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              onTap: () {
-                Navigator.pushNamed(context, '/settings');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.upload_rounded),
-              title: const Text('Upload Academic Schedule'),
-              onTap: () {
-                Navigator.pushNamed(context, '/upload-schedule');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.calendar_today),
-              title: const Text('Calendar'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/calendar');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.help),
-              title: const Text('Help & Support'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Welcome, ${userEmail ?? "User"}'), // Show email or fallback
-            const SizedBox(height: 20),
-            Text(
-              'Today is ${DateFormat.MMMMEEEEd().format(_today)}',
-              style: const TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 35,
-                  vertical: 15,
+                  child: const Text(
+                    'Menu Options',
+                    style: TextStyle(color: Colors.white, fontSize: 24),
+                  ),
                 ),
-                backgroundColor: Theme.of(context).primaryColor,
-              ),
-              onPressed: () => _showDateBottomSheet(context),
-              child: const Text(
-                'View Detailed Date',
-                style: TextStyle(fontSize: 16, color: Colors.white),
-              ),
+                ListTile(
+                  leading: const Icon(Icons.home),
+                  title: const Text('Home'),
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.person),
+                  title: const Text('Profile'),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ProfileScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings),
+                  title: const Text('Settings'),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.upload_rounded),
+                  title: const Text('Upload Academic Schedule'),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/upload-schedule');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: const Text('Calendar'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/calendar');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.help),
+                  title: const Text('Help & Support'),
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            FloatingActionButton(
-              onPressed: () => Navigator.pushNamed(context, '/calendar'),
-              child: const Icon(Icons.calendar_view_day_rounded),
+          ),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Welcome, ${userData['name'] ?? "User"}',
+                ), // Show email or fallback
+                const SizedBox(height: 20),
+                Text(
+                  'Today is ${DateFormat.MMMMEEEEd().format(_today)}',
+                  style: const TextStyle(fontSize: 18),
+                ),
+                const SizedBox(height: 30),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 35,
+                      vertical: 15,
+                    ),
+                    backgroundColor: Theme.of(context).primaryColor,
+                  ),
+                  onPressed: () => _showDateBottomSheet(context),
+                  child: const Text(
+                    'View Detailed Date',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FloatingActionButton(
+                  onPressed: () => Navigator.pushNamed(context, '/calendar'),
+                  child: const Icon(Icons.calendar_view_day_rounded),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

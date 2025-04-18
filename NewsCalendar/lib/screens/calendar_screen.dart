@@ -2,10 +2,15 @@ import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:newscalendar/constants/constants.dart';
 import 'package:table_calendar/table_calendar.dart';
+
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
+import './edit_event_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:newscalendar/main.dart';
+import 'package:newscalendar/auth_service.dart';
 
 class FullScreenCalendar extends StatefulWidget {
   @override
@@ -17,92 +22,274 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   DateTime? _selectedDay;
   OverlayEntry? _overlayEntry;
   AnimationController? _animationController;
-  Map<DateTime, List<Map<String, dynamic>>> _events = {};
-  List<DateTime> _eventDates = [];
+  Map<String, List<Map<String, dynamic>>> _events = {};
+  List<String> _eventIds = []; // Changed to store event IDs instead of dates
   final String apiBaseUrl = '$SOCK_BASE_URL';
   WebSocketChannel? _channel;
-
+  String? _currentUserId;
+  String _newEventTitle = '';
+  String _newEventDescription = '';
   @override
   void initState() {
     super.initState();
+    _getCurrentUser();
     _connectToWebSocket();
-    // _fetchEvents();
   }
 
+  Future<void> _getCurrentUser() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userService = Provider.of<UserService>(context, listen: false);
+
+    final String? token = authService.token;
+    print("-----------------------${token}-----------------");
+
+    try {
+      dynamic userData = await userService.getUserData();
+      if (userData != null && userData['_id'] != null) {
+        print(userData['_id']);
+        setState(() {
+          _currentUserId = userData['_id'];
+        });
+      }
+    } catch (e) {
+      print('Error getting user data: $e');
+    }
+  }
+
+  Future<void> _updateEventViaWebSocket(
+    Map<String, dynamic> updates,
+    String eventId,
+  ) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final token = authService.token;
+
+    if (_channel == null || token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Not connected or not authenticated'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final message = json.encode({
+        "action": "updateEvent",
+        "eventId": eventId,
+        "updates":
+            updates, // Changed from "event" to "updates" to match backend
+        "token": token,
+      });
+
+      _channel!.sink.add(message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Updating event...'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update event: $e'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+    }
+  }
+
+  Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
+    print(eventData);
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final token = authService.token;
+
+    if (_channel == null || token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Not connected or not authenticated'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final message = json.encode({
+        "action": "createEvent",
+        "event": eventData,
+        "token": token, // Include the token for authentication
+      });
+
+      _channel!.sink.add(message);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Creating event...'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create event: $e'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+    }
+  }
+
+  // Modify the _connectToWebSocket method to handle event creation responses
   void _connectToWebSocket() {
     try {
-      // Close previous connection if exists
       _channel?.sink.close();
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
+      print('}===========${token}===========');
+      // Include token in the WebSocket connection URL
+      _channel = IOWebSocketChannel.connect(
+        '$apiBaseUrl?token=$token',
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
-      // Create new WebSocket connection
-      _channel = IOWebSocketChannel.connect('$apiBaseUrl/getevents');
-      // Listen for incoming messages
       _channel?.stream.listen(
         (message) {
-          // print("Conected -----------------------");
-          // print(message);
           _processWebSocketMessage(message);
         },
         onError: (error) {
           print('WebSocket error: $error');
-          // Attempt to reconnect after a delay
           Future.delayed(Duration(seconds: 5), _connectToWebSocket);
         },
         onDone: () {
           print('WebSocket connection closed');
-          // Attempt to reconnect if connection closes
           Future.delayed(Duration(seconds: 5), _connectToWebSocket);
         },
       );
     } catch (e) {
       print('Error connecting to WebSocket: $e');
-      // Attempt to reconnect after a delay
       Future.delayed(Duration(seconds: 5), _connectToWebSocket);
     }
   }
 
+  // Update the _processWebSocketMessage to handle different message types
   void _processWebSocketMessage(dynamic message) {
     try {
       final responseData = json.decode(message);
+      print('WebSocket message: $responseData');
 
-      if (responseData["type"] == "events" && responseData["data"] is List) {
-        final events = <DateTime, List<Map<String, dynamic>>>{};
-        final eventDates = <DateTime>[];
+      if (responseData["type"] == "events") {
+        // Handle events list update
+        final events = <String, List<Map<String, dynamic>>>{};
+        final eventIds = <String>[];
 
         for (var eventData in responseData["data"]) {
-          try {
-            DateTime startDate;
-            if (eventData['start_date'] is String) {
-              startDate = DateTime.parse(eventData['start_date']);
-              startDate = DateTime.parse(eventData['start_date']);
-            } else {
-              // Handle other date formats if needed
-              startDate = DateTime.parse(eventData['start_date'].toString());
-            }
-
-            final dateWithoutTime = DateTime(
-              startDate.year,
-              startDate.month,
-              startDate.day,
-            );
-
-            if (!events.containsKey(dateWithoutTime)) {
-              events[dateWithoutTime] = [];
-              eventDates.add(dateWithoutTime);
-            }
-            events[dateWithoutTime]!.add(eventData);
-          } catch (e) {
-            print('Error processing event date: $e');
+          if (!events.containsKey(eventData['id'])) {
+            events[eventData['id']] = [];
+            eventIds.add(eventData['id']);
           }
+          events[eventData['id']]!.add(eventData);
         }
 
         setState(() {
           _events = events;
-          _eventDates = eventDates;
+          _eventIds = eventIds;
         });
+      } else if (responseData["type"] == "eventCreated") {
+        // Handle successful event creation
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Event created successfully'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+        // Refresh events to include the newly created one
+        _channel?.sink.add('{"action":"refresh"}');
+      } else if (responseData["type"] == "eventUpdated") {
+        // Handle successful event update
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Event updated successfully'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+
+        // If the response contains the updated event, update local state
+        if (responseData["event"] != null) {
+          final updatedEvent = responseData["event"];
+          setState(() {
+            if (_events.containsKey(updatedEvent["id"])) {
+              // Replace the existing event with the updated one
+              _events[updatedEvent["id"]] = [updatedEvent];
+            }
+          });
+        } else {
+          // If no event data in response, refresh the entire list
+          _channel?.sink.add('{"action":"refresh"}');
+        }
+      } else if (responseData["type"] == "error") {
+        // Handle errors with more detailed message from backend
+        String errorMessage = 'Error occurred';
+        if (responseData["message"] != null) {
+          errorMessage = responseData["message"];
+        } else if (responseData["error"] != null) {
+          errorMessage = responseData["error"];
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            duration: Duration(milliseconds: 50),
+          ),
+        );
       }
     } catch (e) {
       print('Error processing WebSocket message: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error processing server message'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteEventViaWebSocket(String eventId) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final token = authService.token;
+    print(token);
+    print(_channel);
+    if (_channel == null || token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Not connected or not authenticated'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final message = json.encode({
+        "action": "deleteEvent",
+        "eventId": eventId,
+        "token": token,
+      });
+
+      _channel!.sink.add(message);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Deleting event...'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete event: $e'),
+          duration: Duration(milliseconds: 90),
+        ),
+      );
     }
   }
 
@@ -113,7 +300,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _animationController = null;
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -150,8 +336,17 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         },
         calendarFormat: CalendarFormat.month,
         eventLoader: (day) {
-          final dateWithoutTime = DateTime(day.year, day.month, day.day);
-          return _events[dateWithoutTime] ?? [];
+          // Find events that match the selected day
+          final dayEvents =
+              _events.values.expand((eventList) => eventList).where((event) {
+                try {
+                  final eventDate = DateTime.parse(event['start_date']);
+                  return isSameDay(day, eventDate);
+                } catch (e) {
+                  return false;
+                }
+              }).toList();
+          return dayEvents;
         },
         calendarStyle: CalendarStyle(
           markersMaxCount: 1,
@@ -204,14 +399,38 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         ),
         calendarBuilders: CalendarBuilders(
           defaultBuilder: (context, day, focusedDay) {
-            final isEventDay = _eventDates.any(
-              (eventDate) => isSameDay(eventDate, day),
-            );
+            final isEventDay = _events.values
+                .expand((eventList) => eventList)
+                .any((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                });
             final isWeekend = _isWeekend(day);
+            final hasUserEvent = _events.values
+                .expand((eventList) => eventList)
+                .where((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                })
+                .any((event) => event['userId'] == _currentUserId);
+
             return Center(
               child: Container(
                 decoration: BoxDecoration(
-                  color: isEventDay ? Colors.green.withOpacity(0.2) : null,
+                  color:
+                      hasUserEvent
+                          ? Colors.orange.withOpacity(0.3)
+                          : isEventDay
+                          ? Colors.green.withOpacity(0.2)
+                          : null,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -222,7 +441,11 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                       color:
                           isWeekend
                               ? Colors.red
-                              : (isEventDay ? Colors.green[800] : Colors.black),
+                              : (hasUserEvent
+                                  ? Colors.orange[800]
+                                  : (isEventDay
+                                      ? Colors.green[800]
+                                      : Colors.black)),
                     ),
                   ),
                 ),
@@ -230,17 +453,38 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             );
           },
           todayBuilder: (context, day, focusedDay) {
-            final isEventDay = _eventDates.any(
-              (eventDate) => isSameDay(eventDate, day),
-            );
+            final isEventDay = _events.values
+                .expand((eventList) => eventList)
+                .any((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                });
             final isWeekend = _isWeekend(day);
+            final hasUserEvent = _events.values
+                .expand((eventList) => eventList)
+                .where((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                })
+                .any((event) => event['userId'] == _currentUserId);
+
             return Center(
               child: Container(
                 decoration: BoxDecoration(
                   color:
-                      isEventDay
-                          ? Colors.green.withOpacity(0.3)
-                          : Colors.blue[100],
+                      hasUserEvent
+                          ? Colors.orange.withOpacity(0.4)
+                          : (isEventDay
+                              ? Colors.green.withOpacity(0.3)
+                              : Colors.blue[100]),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -252,7 +496,11 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                       color:
                           isWeekend
                               ? Colors.red[700]
-                              : (isEventDay ? Colors.green[900] : Colors.black),
+                              : (hasUserEvent
+                                  ? Colors.orange[900]
+                                  : (isEventDay
+                                      ? Colors.green[900]
+                                      : Colors.black)),
                     ),
                   ),
                 ),
@@ -260,13 +508,35 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             );
           },
           selectedBuilder: (context, day, focusedDay) {
-            final isEventDay = _eventDates.any(
-              (eventDate) => isSameDay(eventDate, day),
-            );
+            final isEventDay = _events.values
+                .expand((eventList) => eventList)
+                .any((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                });
+            final hasUserEvent = _events.values
+                .expand((eventList) => eventList)
+                .where((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                })
+                .any((event) => event['userId'] == _currentUserId);
+
             return Center(
               child: Container(
                 decoration: BoxDecoration(
-                  color: isEventDay ? Colors.green : Colors.blue,
+                  color:
+                      hasUserEvent
+                          ? Colors.orange
+                          : (isEventDay ? Colors.green : Colors.blue),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -279,14 +549,36 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             );
           },
           outsideBuilder: (context, day, focusedDay) {
-            final isEventDay = _eventDates.any(
-              (eventDate) => isSameDay(eventDate, day),
-            );
+            final isEventDay = _events.values
+                .expand((eventList) => eventList)
+                .any((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                });
             final isWeekend = _isWeekend(day);
+            final hasUserEvent = _events.values
+                .expand((eventList) => eventList)
+                .where((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                })
+                .any((event) => event['userId'] == _currentUserId);
+
             return Center(
               child: Container(
                 decoration: BoxDecoration(
-                  color: isEventDay ? Colors.green.withOpacity(0.1) : null,
+                  color:
+                      hasUserEvent
+                          ? Colors.orange.withOpacity(0.1)
+                          : (isEventDay ? Colors.green.withOpacity(0.1) : null),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -297,9 +589,11 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                       color:
                           isWeekend
                               ? Colors.red[300]
-                              : (isEventDay
-                                  ? Colors.green[400]
-                                  : Colors.grey[400]),
+                              : (hasUserEvent
+                                  ? Colors.orange[400]
+                                  : (isEventDay
+                                      ? Colors.green[400]
+                                      : Colors.grey[400])),
                     ),
                   ),
                 ),
@@ -326,12 +620,15 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     );
 
     final screenSize = MediaQuery.of(context).size;
-    final dateWithoutTime = DateTime(
-      selectedDay.year,
-      selectedDay.month,
-      selectedDay.day,
-    );
-    final dayEvents = _events[dateWithoutTime] ?? [];
+    final dayEvents =
+        _events.values.expand((eventList) => eventList).where((event) {
+          try {
+            final eventDate = DateTime.parse(event['start_date']);
+            return isSameDay(eventDate, selectedDay);
+          } catch (e) {
+            return false;
+          }
+        }).toList();
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
@@ -394,14 +691,193 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                 itemCount: dayEvents.length,
                                 itemBuilder: (context, index) {
                                   final event = dayEvents[index];
+                                  final isUserEvent =
+                                      event['userId'] == _currentUserId;
                                   return ListTile(
-                                    title: Text(event['event'] ?? 'No Title'),
-                                    subtitle: Text(
-                                      event['start_date'] ?? 'No Description',
+                                    leading:
+                                        isUserEvent
+                                            ? Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 30,
+                                                  child: TextButton(
+                                                    child: Icon(
+                                                      Icons.edit,
+                                                      color: Colors.blue,
+                                                    ),
+                                                    onPressed: () {
+                                                      _removeOverlay();
+                                                      showDialog(
+                                                        context: context,
+                                                        builder:
+                                                            (
+                                                              context,
+                                                            ) => AlertDialog(
+                                                              title: Text(
+                                                                'Update Current Event',
+                                                              ),
+                                                              content: SingleChildScrollView(
+                                                                child: Column(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    TextField(
+                                                                      decoration: InputDecoration(
+                                                                        labelText:
+                                                                            'Title',
+                                                                      ),
+                                                                      controller:
+                                                                          TextEditingController(
+                                                                            text:
+                                                                                event['title'],
+                                                                          ),
+                                                                      onChanged:
+                                                                          (
+                                                                            value,
+                                                                          ) =>
+                                                                              _newEventTitle =
+                                                                                  value,
+                                                                    ),
+                                                                    TextField(
+                                                                      decoration: InputDecoration(
+                                                                        labelText:
+                                                                            'Description',
+                                                                      ),
+                                                                      controller:
+                                                                          TextEditingController(
+                                                                            text:
+                                                                                event['description'],
+                                                                          ),
+                                                                      onChanged:
+                                                                          (
+                                                                            value,
+                                                                          ) =>
+                                                                              _newEventDescription =
+                                                                                  value,
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                              actions: [
+                                                                TextButton(
+                                                                  onPressed:
+                                                                      () => Navigator.pop(
+                                                                        context,
+                                                                      ),
+                                                                  child: Text(
+                                                                    'Cancel',
+                                                                  ),
+                                                                ),
+                                                                ElevatedButton(
+                                                                  onPressed: () {
+                                                                    final updates = {
+                                                                      "title":
+                                                                          _newEventTitle.isNotEmpty
+                                                                              ? _newEventTitle
+                                                                              : event['title'],
+                                                                      "description":
+                                                                          _newEventDescription.isNotEmpty
+                                                                              ? _newEventDescription
+                                                                              : event['description'],
+                                                                    };
+                                                                    _updateEventViaWebSocket(
+                                                                      updates,
+                                                                      event['id'],
+                                                                    );
+                                                                    Navigator.pop(
+                                                                      context,
+                                                                    );
+                                                                  },
+                                                                  child: Text(
+                                                                    'Update',
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  width: 30,
+                                                  child: TextButton(
+                                                    child: Icon(
+                                                      Icons.delete,
+                                                      color: Colors.red,
+                                                    ),
+                                                    onPressed: () {
+                                                      _removeOverlay();
+                                                      showDialog(
+                                                        context: context,
+                                                        builder:
+                                                            (
+                                                              context,
+                                                            ) => AlertDialog(
+                                                              title: Text(
+                                                                'Delete Event',
+                                                              ),
+                                                              content: Text(
+                                                                'Are you sure you want to delete this event?',
+                                                              ),
+                                                              actions: [
+                                                                TextButton(
+                                                                  onPressed:
+                                                                      () => Navigator.pop(
+                                                                        context,
+                                                                      ),
+                                                                  child: Text(
+                                                                    'Cancel',
+                                                                  ),
+                                                                ),
+                                                                ElevatedButton(
+                                                                  style: ElevatedButton.styleFrom(
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .red,
+                                                                  ),
+                                                                  onPressed: () {
+                                                                    _deleteEventViaWebSocket(
+                                                                      event['id'],
+                                                                    );
+                                                                    Navigator.pop(
+                                                                      context,
+                                                                    );
+                                                                  },
+                                                                  child: Text(
+                                                                    'Delete',
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                            : SizedBox(width: 60),
+                                    title: Container(
+                                      width: double.infinity,
+                                      child: Text(event['title'] ?? 'No Title'),
                                     ),
-                                    leading: Icon(
-                                      Icons.event,
-                                      color: Colors.green,
+                                    subtitle: Container(
+                                      width: double.infinity,
+                                      child: Text(
+                                        event['description'] ??
+                                            'No Description',
+                                      ),
+                                    ),
+                                    trailing: SizedBox(
+                                      width: 20,
+                                      child: Icon(
+                                        Icons.event,
+                                        color:
+                                            isUserEvent
+                                                ? Colors.orange
+                                                : Colors.green,
+                                      ),
                                     ),
                                   );
                                 },
@@ -429,6 +905,70 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                               style: TextStyle(fontSize: 16),
                             ),
                           ),
+                          SizedBox(height: 20),
+                          FloatingActionButton(
+                            onPressed: () {
+                              _removeOverlay();
+                              showDialog(
+                                context: context,
+                                builder:
+                                    (context) => AlertDialog(
+                                      title: Text('Add New Event'),
+                                      content: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            TextField(
+                                              decoration: InputDecoration(
+                                                labelText: 'Title',
+                                              ),
+                                              onChanged:
+                                                  (value) =>
+                                                      _newEventTitle = value,
+                                            ),
+                                            TextField(
+                                              decoration: InputDecoration(
+                                                labelText: 'Description',
+                                              ),
+                                              onChanged:
+                                                  (value) =>
+                                                      _newEventDescription =
+                                                          value,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed:
+                                              () => Navigator.pop(context),
+                                          child: Text('Cancel'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            final newEvent = {
+                                              "title": _newEventTitle,
+                                              "start_date": DateFormat(
+                                                "dd-MM-yyyy",
+                                              ).format(selectedDay),
+                                              "description":
+                                                  _newEventDescription,
+                                              "end_date": DateFormat(
+                                                "dd-MM-yyyy",
+                                              ).format(selectedDay),
+                                            };
+                                            _createEventViaWebSocket(newEvent);
+                                            Navigator.pop(context);
+                                          },
+                                          child: Text('Create'),
+                                        ),
+                                      ],
+                                    ),
+                              );
+                            },
+                            child: Icon(Icons.add),
+                            tooltip: "Add Event",
+                          ),
                         ],
                       ),
                     ),
@@ -440,7 +980,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         );
       },
     );
-
     Overlay.of(context).insert(_overlayEntry!);
     _animationController!.forward();
   }

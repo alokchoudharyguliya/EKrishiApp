@@ -113,3 +113,115 @@ exports.addEvent = async (req, res) => {
         });
     }
 };
+
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+// exports.addEvents = async (req, res) => {
+//     try {
+//         // Verify the token from Authorization header
+//         const authHeader = req.headers['authorization'];
+//         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+        
+//         if (!token) {
+//             return res.status(401).json({ message: 'Authorization token missing' });
+//         }
+
+//         // Verify token and get user data
+//         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//         const userId = decoded.userId; // Assuming your token contains userId
+        
+//         const events = req.body.events;
+        
+//         if (!events || !Array.isArray(events)) {
+//             return res.status(400).json({ message: 'Invalid events data format' });
+//         }
+
+//         // Validate each event and add userId
+//         const validatedEvents = events.map(eventData => {
+//             console.log(eventData);
+//             if (!eventData.title || !eventData.start_date) {
+//                 throw new Error('Missing required event fields');
+//             }
+            
+//             return {
+//                 ...eventData,
+//                 userId: userId // Add the user's ID to each event
+//             };
+//             // return res.status(222).json({"message":eventData});
+//         });
+
+//         // Insert all events at once
+//         const insertedEvents = await event.insertMany(validatedEvents);
+
+//         res.status(201).json({
+//             message: 'Events saved successfully',
+//             count: insertedEvents.length,
+//             events: insertedEvents
+//         });
+//     } catch (error) {
+//         console.error('Error saving events:', error);
+        
+//         if (error.name === 'JsonWebTokenError') {
+//             return res.status(401).json({ 
+//                 message: 'Invalid or expired token',
+//                 error: error.message 
+//             });
+//         }
+        
+//         res.status(500).json({ 
+//             message: 'Error saving events',
+//             error: error.message 
+//         });
+//     }
+// };
+
+const { Types: { ObjectId } } = require('mongoose');
+
+exports.addEvents= async (req, res) => {
+    console.log("hay")
+  try {
+    const events = req.body.events;
+
+    if (!events || !Array.isArray(events)) {
+      return res.status(400).json({ message: 'Invalid events data format' });
+    }
+
+    // Process each event and convert ISO strings to Date objects
+    const processedEvents = events.map(event => {
+      const { _id, ...eventData } = event; // Exclude _id (let MongoDB generate it)
+
+      return {
+        ...eventData,
+        title: event.title || 'Untitled Event',
+        description: event.description || '',
+        // allDay: event.allDay || false,
+        userId: event.userId ? new ObjectId(event.userId) : null, // Convert to ObjectId if needed
+        // Convert ISO strings to Date objects for MongoDB
+        start_date: new Date(event.start_date),
+        end_date: new Date(event.end_date),
+        createdAt: event.createdAt ? new Date(event.createdAt) : new Date(),
+        updatedAt: event.updatedAt ? new Date(event.updatedAt) : new Date(),
+      };
+    });
+
+    // Insert all events into MongoDB
+    const insertedEvents = await event.insertMany(processedEvents);
+
+    // Return success response (remove Mongoose-specific fields like __v)
+    res.status(201).json({
+      message: 'Events saved successfully',
+      count: insertedEvents.length,
+      events: insertedEvents.map(e => {
+        const { __v, ...event } = e.toObject();
+        return event;
+      }),
+    });
+  } catch (error) {
+    console.error('Error saving events:', error);
+    res.status(500).json({ 
+      message: 'Error saving events',
+      error: error.message,
+    });
+  }
+};
