@@ -17,17 +17,12 @@ const fileRoutes = require('./routes/filesRoutes.js');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const fs = require('fs');
 
-// Configuration
-// const MONGODB_URI = "mongodb://localhost:27017/calendar";
-// const SECRET_KEY = ""; // Replace with your actual secret key
-// const BASE_URL = 'http://192.168.194.15:3000';
-// const WEB_SOCK = 'ws://192.168.194.15:3000';
 const app = express();
 const server = http.createServer(app);
 
 // Session store
 const store = new MongoDBStore({
-    uri: MONGODB_URI,
+    uri: process.env.MONGODB_URI,
     collection: 'sessions',
 });
 
@@ -90,18 +85,13 @@ app.use(cors(corsOptions));
 const serviceAccount = require('./newscalendar-ac03a-firebase-adminsdk-fbsvc-ceee853a90.json');
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: 'https://newscalendar-ac03a.firebaseio.com'
+    databaseURL: process.env.FIREBASE_DATABASE_URL
 });
 
 // Routes
 app.use(userRoutes);
 app.use(fileRoutes);
 app.use(eventRoutes);
-
-// const WebSocket = require('ws');
-// const jwt = require('jsonwebtoken');
-// const Event = require('./models/Event'); // Assuming you have an Event model
-// const { formatDate } = require('./utils'); // Date formatting utility
 
 // WebSocket Server
 const wss = new WebSocket.Server({ server });
@@ -226,7 +216,7 @@ async function handleCreateEvent(eventData, ws, userId) {
         function parseDate(input) {
             // If already a Date object, return it
             if (input instanceof Date) return input;
-            
+
             // Try ISO format (YYYY-MM-DD)
             const isoMatch = input.match(/^(\d{2})-(\d{2})-(\d{4})$/);
             if (isoMatch) {
@@ -236,13 +226,13 @@ async function handleCreateEvent(eventData, ws, userId) {
                     parseInt(isoMatch[1], 10)
                 ));
             }
-            
+
             // Fallback to Date constructor
             const date = new Date(input);
             if (isNaN(date.getTime())) throw new Error(`Invalid date: ${input}`);
             return date;
         }
-        
+
         const newEvent = new Event({
             title: eventData.title,
             start_date: parseDate(eventData.start_date),
@@ -359,7 +349,7 @@ async function handleDeleteEvent(eventId, ws, userId) {
     }
 }
 
-// Broadcast events to all connected clients
+
 async function broadcastEvents() {
     try {
         const events = await Event.find().sort({ start_date: 1 });
@@ -513,10 +503,10 @@ app.get('/', (req, res) => {
 });
 
 // Database connection and server startup
-mongoose.connect(MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
         console.log("Connected to users database");
-        return mongoose.createConnection(MONGODB_URI, {
+        return mongoose.createConnection(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true
         });

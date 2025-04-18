@@ -1,5 +1,7 @@
 const event = require('../models/event');
 const mongoose = require('mongoose');
+const { Types: { ObjectId } } = require('mongoose');
+require('dotenv').config();
 exports.getEvents = async (req, res) => {
     try {
         const userId = req.body.userId;
@@ -43,8 +45,6 @@ exports.updateEvent = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error." });
     }
 };
-
-
 exports.deleteEvent = async (req, res) => {
     try {
         const { eventId } = req.body;
@@ -113,70 +113,6 @@ exports.addEvent = async (req, res) => {
         });
     }
 };
-
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
-
-// exports.addEvents = async (req, res) => {
-//     try {
-//         // Verify the token from Authorization header
-//         const authHeader = req.headers['authorization'];
-//         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-        
-//         if (!token) {
-//             return res.status(401).json({ message: 'Authorization token missing' });
-//         }
-
-//         // Verify token and get user data
-//         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-//         const userId = decoded.userId; // Assuming your token contains userId
-        
-//         const events = req.body.events;
-        
-//         if (!events || !Array.isArray(events)) {
-//             return res.status(400).json({ message: 'Invalid events data format' });
-//         }
-
-//         // Validate each event and add userId
-//         const validatedEvents = events.map(eventData => {
-//             console.log(eventData);
-//             if (!eventData.title || !eventData.start_date) {
-//                 throw new Error('Missing required event fields');
-//             }
-            
-//             return {
-//                 ...eventData,
-//                 userId: userId // Add the user's ID to each event
-//             };
-//             // return res.status(222).json({"message":eventData});
-//         });
-
-//         // Insert all events at once
-//         const insertedEvents = await event.insertMany(validatedEvents);
-
-//         res.status(201).json({
-//             message: 'Events saved successfully',
-//             count: insertedEvents.length,
-//             events: insertedEvents
-//         });
-//     } catch (error) {
-//         console.error('Error saving events:', error);
-        
-//         if (error.name === 'JsonWebTokenError') {
-//             return res.status(401).json({ 
-//                 message: 'Invalid or expired token',
-//                 error: error.message 
-//             });
-//         }
-        
-//         res.status(500).json({ 
-//             message: 'Error saving events',
-//             error: error.message 
-//         });
-//     }
-// };
-
-const { Types: { ObjectId } } = require('mongoose');
 
 exports.addEvents= async (req, res) => {
     console.log("hay")
