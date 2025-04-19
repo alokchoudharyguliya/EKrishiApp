@@ -410,21 +410,21 @@ function formatDate(date) {
 app.post('/save-user', upload.single('image'), async (req, res) => {
     try {
         const { userId, name, email, phone, dob, role } = req.body;
-
+        console.log('Request files:', req.file);
         if (!userId) {
             return res.status(400).json({
                 success: false,
                 message: "User ID is required."
             });
         }
-
+        
         if (role && !['student', 'faculty', 'other', 'admin'].includes(role)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid role specified."
             });
         }
-
+        
         const updateData = {
             name,
             email,
@@ -432,7 +432,7 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
             dob,
             role: role || 'student'
         };
-
+        
         if (req.file) {
             const uploadDir = path.join(__dirname, 'uploads', 'profiles');
             if (!fs.existsSync(uploadDir)) {
@@ -440,16 +440,16 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
             }
 
             const fileExt = path.extname(req.file.originalname);
-            let filename = `${req.file.filename}`;
-            updateData.photoUrl = `${process.env.BASE_URL}/profile/${req.file.originalname}`;
-            filename = `${req.file.originalname}`;
+            const filename = `${userId}_${Date.now()}${fileExt}`;
             const filePath = path.join(uploadDir, filename);
 
             await fs.promises.rename(req.file.path, filePath);
+            updateData.photoUrl = `${process.env.BASE_URL}/profile/${filename}`;
 
             const user = await User.findById(userId);
             if (user && user.photoUrl) {
-                const oldFilePath = path.join(__dirname, '..', user.photoUrl);
+                const oldFileUrl = user.photoUrl.replace(`${process.env.BASE_URL}/profile/`, '');
+                const oldFilePath = path.join(uploadDir, oldFileUrl);
                 if (fs.existsSync(oldFilePath)) {
                     try {
                         await fs.promises.unlink(oldFilePath);
@@ -496,7 +496,6 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
         });
     }
 });
-
 // Root endpoint
 app.get('/', (req, res) => {
     res.send('Node.js Firestore API is running');

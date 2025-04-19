@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:newscalendar/constants/constants.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import 'package:http/http.dart' as http;
+// import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
-import './edit_event_screen.dart';
+// import './edit_event_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:newscalendar/main.dart';
 import 'package:newscalendar/auth_service.dart';
@@ -37,21 +37,20 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   Future<void> _getCurrentUser() async {
-    final authService = Provider.of<AuthService>(context, listen: false);
+    // final authService = Provider.of<AuthService>(context, listen: false);
     final userService = Provider.of<UserService>(context, listen: false);
-
-    final String? token = authService.token;
-    print("-----------------------${token}-----------------");
 
     try {
       dynamic userData = await userService.getUserData();
+      // print("${userData}------================");
       if (userData != null && userData['_id'] != null) {
-        print(userData['_id']);
         setState(() {
           _currentUserId = userData['_id'];
         });
+        // print("${_currentUserId}>>>>>>>>");
       }
     } catch (e) {
+      // print("$R{_currentUserId}<<<<<<");
       print('Error getting user data: $e');
     }
   }
@@ -142,10 +141,11 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   // Modify the _connectToWebSocket method to handle event creation responses
   void _connectToWebSocket() {
     try {
+      _getCurrentUser();
       _channel?.sink.close();
       final authService = Provider.of<AuthService>(context, listen: false);
       final token = authService.token;
-      print('}===========${token}===========');
+      // print('}===========${token}===========');
       // Include token in the WebSocket connection URL
       _channel = IOWebSocketChannel.connect(
         '$apiBaseUrl?token=$token',
@@ -415,13 +415,14 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .where((event) {
                   try {
                     final eventDate = DateTime.parse(event['start_date']);
+                    print(event);
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
                   }
                 })
                 .any((event) => event['userId'] == _currentUserId);
-
+            print('${_currentUserId}?????????????');
             return Center(
               child: Container(
                 decoration: BoxDecoration(

@@ -69,7 +69,7 @@ class _LoginState extends State<Login> {
         final myToken = responseData['token'];
         final userId =
             responseData["user"]['_id']; // Make sure your API returns this
-        print(userId);
+        final userData = responseData['user'];
         // Store authentication data
         final authService = Provider.of<AuthService>(context, listen: false);
         await authService.setAuthToken(myToken);
@@ -77,6 +77,7 @@ class _LoginState extends State<Login> {
         // Store user data using UserService
         final userService = Provider.of<UserService>(context, listen: false);
         await userService.setUserId(userId);
+        await userService.cacheUserData(userData);
         await FlutterSecureStorage().write(
           key: 'userEmail',
           value: email.text.trim(),

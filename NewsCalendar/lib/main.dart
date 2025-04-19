@@ -1,90 +1,3 @@
-// import 'package:flutter/material.dart';
-// import 'package:newscalendar/screens/calendar_screen.dart';
-// import '/screens/profile_screen.dart';
-// import 'package:newscalendar/screens/settings.dart';
-// import 'package:newscalendar/wrapper.dart';
-// import 'package:provider/provider.dart';
-// import 'auth_service.dart';
-// import './homepage.dart';
-// import './screens/signup_screen.dart';
-// import './screens/upload.dart';
-// import './screens/login_screen.dart';
-// import 'auth_form_provider.dart';
-// import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-// class UserService {
-//   final FlutterSecureStorage _storage = FlutterSecureStorage();
-//   Map<String, dynamic>? cachedUserData;
-//   Future<String?> getUserId() async {
-//     return await _storage.read(key: 'userId');
-//   }
-
-//   void cacheUserData(Map<String, dynamic> data) {
-//     cachedUserData = data;
-//     // Optional: Save to local storage
-//   }
-
-//   Future<void> setUserId(String userId) async {
-//     print(userId);
-//     await _storage.write(key: 'userId', value: userId);
-//   }
-
-//   Future<void> clearUserData() async {
-//     await _storage.delete(key: 'userId');
-//     await _storage.delete(key: 'userEmail');
-//   }
-
-//   Future<void> cacheProfilePhoto(String localPath) async {
-//     await _storage.write(key: 'cachedProfilePhoto', value: "localPath");
-//   }
-
-//   // Future<String?> getCachedProfilePhoto() async {
-//   // return prefs.getString('cachedProfilePhoto');
-//   // }
-// }
-
-// void main() async {
-//   WidgetsFlutterBinding.ensureInitialized();
-//   final storage = FlutterSecureStorage();
-
-//   runApp(
-//     MultiProvider(
-//       providers: [
-//         ChangeNotifierProvider(
-//           create: (context) => AuthService(storage: storage),
-//         ),
-//         Provider(create: (_) => UserService()), // Add this
-//         ChangeNotifierProvider(create: (context) => AuthFormProvider()),
-//       ],
-//       child: const MyApp(),
-//     ),
-//   );
-// }
-
-// class MyApp extends StatelessWidget {
-//   const MyApp({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return MaterialApp(
-//       title: 'App Name',
-//       theme: ThemeData(
-//         primarySwatch: Colors.blue,
-//         visualDensity: VisualDensity.adaptivePlatformDensity,
-//       ),
-//       home: const Wrapper(),
-//       routes: {
-//         '/login': (context) => const Login(),
-//         '/signup': (context) => SignupScreen(),
-//         '/home': (context) => const Homepage(),
-//         '/calendar': (context) => FullScreenCalendar(),
-//         '/upload-schedule': (context) => ImageUploadScreen(),
-//         '/profile': (context) => const ProfileScreen(),
-//         '/settings': (context) => SettingsPage(),
-//       },
-//     );
-//   }
-// }
 import 'package:flutter/material.dart';
 import 'package:newscalendar/screens/calendar_screen.dart';
 import 'package:newscalendar/screens/profile_screen.dart';
@@ -100,7 +13,6 @@ import './screens/upload.dart';
 import './screens/login_screen.dart';
 import 'auth_form_provider.dart';
 import 'dart:convert';
-import './screens/profile_screen.dart';
 
 class UserService with ChangeNotifier {
   final FlutterSecureStorage _storage = FlutterSecureStorage();
@@ -108,6 +20,10 @@ class UserService with ChangeNotifier {
 
   Future<String?> getUserId() async {
     return await _storage.read(key: 'userId');
+  }
+
+  Future<void> setUserId(String userId) async {
+    await _storage.write(key: 'userId', value: userId);
   }
 
   Future<void> cacheUserData(Map<String, dynamic> data) async {
@@ -126,47 +42,34 @@ class UserService with ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>?> _getUserDataFromSecureStorage() async {
-    try {
-      final userDataString = await _storage.read(key: 'userData');
-      if (userDataString != null) {
-        return json.decode(userDataString);
-      }
-      return null;
-    } catch (e) {
-      print('Error reading from secure storage: $e');
-      return null;
-    }
-  }
-
   Future<Map<String, dynamic>?> getUserData() async {
     // First check memory cache
     if (cachedUserData != null) return cachedUserData;
 
     // If not in cache, check secure storage
     final userDataString = await _storage.read(key: 'userData');
-    print(userDataString);
+    // print("${userDataString}---------------------");
     if (userDataString != null) {
       cachedUserData = jsonDecode(userDataString); // Convert back to Map
-      return cachedUserData;
+      return jsonDecode(userDataString);
     }
-
     return null; // No data available
   }
 
-  Future<void> setUserId(String userId) async {
-    await _storage.write(key: 'userId', value: userId);
-  }
+  // Future<void> cacheProfilePhoto(String localPath) async {
+  //   await _storage.write(key: 'cachedProfilePhoto', value: localPath);
+  // }
+
+  // Future<void> getProfilePhoto(String localPath) async {
+  //   await _storage.read(key: 'cachedProfilePhoto');
+  // }
 
   Future<void> clearUserData() async {
     await _storage.delete(key: 'userId');
     await _storage.delete(key: 'userEmail');
     await _storage.delete(key: 'userData');
+    // await _storage.delete(key: 'cachedProfilePhoto');
     notifyListeners();
-  }
-
-  Future<void> cacheProfilePhoto(String localPath) async {
-    await _storage.write(key: 'cachedProfilePhoto', value: localPath);
   }
 }
 

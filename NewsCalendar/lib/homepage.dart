@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'auth_service.dart';
 import 'package:provider/provider.dart';
 import 'main.dart';
+import 'dart:io';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -22,13 +23,22 @@ class _HomepageState extends State<Homepage> {
   String? userEmail;
   final DateTime _today = DateTime.now();
   String? authToken;
-
+  File? _cachedImageFile;
   @override
   void initState() {
     super.initState();
     // Initialize authToken from widget.token
     authToken = widget.token;
     Provider.of<AuthService>(context, listen: false).checkAuthStatus();
+  }
+
+  Future<void> _clearProfileImageCache() async {
+    if (_cachedImageFile != null && await _cachedImageFile!.exists()) {
+      await _cachedImageFile!.delete();
+      setState(() {
+        _cachedImageFile = null;
+      });
+    }
   }
 
   Future<void> signout() async {
@@ -61,6 +71,7 @@ class _HomepageState extends State<Homepage> {
       await userService.clearUserData();
       // Navigate to login screen
       if (mounted) {
+        _clearProfileImageCache();
         Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {

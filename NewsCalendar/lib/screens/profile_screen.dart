@@ -11,6 +11,7 @@ import 'package:dio/dio.dart';
 import 'dart:async';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http_parser/http_parser.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -146,65 +147,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Future<void> _fetchUserData() async {
-  //   if (!_isRefreshing) setState(() => _isLoading = true);
-  //   _errorMessage = null;
-
-  //   try {
-  //     final userService = Provider.of<UserService>(context, listen: false);
-  //     final userId = await userService.getUserId();
-  //     if (userId == null) throw Exception('User not logged in');
-
-  //     final response = await http.post(
-  //       Uri.parse('$BASE_URL/get-user'),
-  //       headers: {'Content-Type': 'application/json'},
-  //       body: json.encode({'userId': userId}),
-  //     );
-
-  //     if (response.statusCode == 200) {
-  //       final data = json.decode(response.body);
-  //       final newUserData = data['userData'][0];
-  //       bool photoUrlChanged =
-  //           _userData?['photoUrl'] != newUserData['photoUrl'];
-
-  //       userService.cacheUserData(newUserData);
-  //       // print(userService.cachedUserData);
-  //       setState(() {
-  //         _userData = newUserData;
-  //         _updateControllers();
-  //       });
-
-  //       if (photoUrlChanged || _cachedImageFile == null) {
-  //         if (newUserData['photoUrl'] != null) {
-  //           await _cacheAndLoadProfileImage(newUserData['photoUrl']);
-  //         }
-  //       }
-  //     } else {
-  //       setState(() {
-  //         _errorMessage = 'Failed to load profile data';
-  //       });
-  //     }
-  //   } catch (e) {
-  //     setState(() {
-  //       _errorMessage = 'Error loading profile: ${e.toString()}';
-  //     });
-  //   } finally {
-  //     setState(() {
-  //       _isLoading = false;
-  //       _isRefreshing = false;
-  //     });
-  //   }
-  // }
-  // Future<void> _saveUserDataToSecureStorage(
-  //   Map<String, dynamic> userData,
-  // ) async {
-  //   try {
-  //     await _storage.write(key: 'userData', value: json.encode(userData));
-  //   } catch (e) {
-  //     print('Error saving to secure storage: $e');
-  //   }
-  // }
-
   Future<void> _fetchUserData() async {
     if (!_isRefreshing) setState(() => _isLoading = true);
     _errorMessage = null;
@@ -229,16 +171,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // This will automatically save to secure storage via UserService
         await userService.cacheUserData(newUserData);
         await _storage.write(key: 'userData', value: json.encode(newUserData));
-
-        // try {
-        //   final userDataString = await _storage.read(key: 'userData');
-        //   if (userDataString != null) {
-        //     print("------------------${json.decode(userDataString)}");
-        //     return json.decode(userDataString);
-        //   }
-        // } catch (e) {
-        //   print('Error saving to secure storage: $e');
-        // }
 
         setState(() {
           _userData = newUserData;
@@ -288,11 +220,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _cacheAndLoadProfileImage(String imageUrl) async {
     try {
+      if (_cachedImageFile != null && await _cachedImageFile!.exists()) {
+        await _cachedImageFile!.delete();
+      }
+      // print(imageUrl);
       final file = await DefaultCacheManager().getSingleFile(imageUrl);
+      print(file.toString());
       if (await file.exists()) {
         setState(() {
           _cachedImageFile = file;
         });
+        // print(_cachedImageFile);
       }
     } catch (e) {
       print('Error caching profile image: $e');
@@ -312,6 +250,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (userId == null) throw Exception('User not logged in');
 
       final dio = Dio();
+      // First create the basic form data
       final formData = FormData.fromMap({
         'userId': userId,
         'name': _nameController.text,
@@ -321,18 +260,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'role': _selectedRole,
       });
 
+      // Add the image file if selected
       if (_selectedImageFile != null) {
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        formData.files.add(
-          MapEntry(
-            'image',
-            await MultipartFile.fromFile(
-              _selectedImageFile!.path,
-              filename: '${userId}_$timestamp.jpg',
-            ),
-          ),
+        // Print debug information about the file
+        print('Selected file path: ${_selectedImageFile!.path}');
+        print('File exists: ${await _selectedImageFile!.exists()}');
+        print('File size: ${await _selectedImageFile!.length()} bytes');
+
+        // Create the multipart file
+        final multipartFile = await MultipartFile.fromFile(
+          _selectedImageFile!.path,
+          filename:
+              'profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          contentType: MediaType('image', 'jpeg'),
         );
+
+        // Add to form data - using the same field name ('image') that your backend expects
+        formData.files.add(MapEntry('image', multipartFile));
+
+        // Debug print the form data files
+        print('FormData files count: ${formData.files.length}');
       }
+
+      // Debug print the complete form data
+      print('Sending FormData with fields: ${formData.fields}');
+      print('Sending FormData with files: ${formData.files.map((f) => f.key)}');
 
       final response = await dio
           .post(
@@ -340,10 +292,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             data: formData,
             options: Options(
               contentType: 'multipart/form-data',
-              headers: {"Content-type": "multipart/form-data"},
+              headers: {
+                "Content-Type": "multipart/form-data",
+                "Accept": "application/json",
+              },
             ),
+            onSendProgress: (sent, total) {
+              print(
+                'Upload progress: ${(sent / total * 100).toStringAsFixed(0)}%',
+              );
+            },
           )
           .timeout(const Duration(seconds: 30));
+
+      print('Response received: ${response.statusCode}');
+      print('Response data: ${response.data}');
 
       if (response.statusCode == 200 && response.data['success']) {
         final updatedUserData = {
@@ -362,7 +325,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _selectedImageFile = null;
         });
 
-        // Update cache and load new image if photoUrl changed
         if (response.data['photoUrl'] != null) {
           await _cacheAndLoadProfileImage(response.data['photoUrl']);
         }
@@ -376,6 +338,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         throw Exception(response.data['message'] ?? 'Failed to save profile');
       }
     } catch (e) {
+      print('Error in _saveProfileChanges: $e');
       setState(() {
         _errorMessage = 'Error saving profile: ${e.toString()}';
       });
