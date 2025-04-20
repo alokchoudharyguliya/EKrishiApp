@@ -12,8 +12,6 @@ import 'package:newscalendar/auth_service.dart';
 import '../color/color.dart';
 import 'update_event_screen.dart';
 import 'create_event_screen.dart';
-import '../services/sync_service.dart';
-import '../services/local_db_service.dart';
 
 class FullScreenCalendar extends StatefulWidget {
   @override
@@ -37,37 +35,9 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   @override
   void initState() {
     super.initState();
-    _initializeData();
     _getCurrentUser();
     _connectToWebSocket();
     _focusNode.canRequestFocus = false;
-  }
-
-  Future<void> _initializeData() async {
-    // Load from local DB first
-    final localDb = Provider.of<HiveLocalDbService>(context, listen: false);
-    final events = await localDb.getEvents();
-
-    setState(() {
-      _events = _processEvents(events);
-    });
-
-    // Then try to sync with server
-    final syncService = Provider.of<SyncService>(context, listen: false);
-    await syncService.syncInitialData();
-  }
-
-  Map<String, List<Map<String, dynamic>>> _processEvents(
-    List<Map<String, dynamic>> events,
-  ) {
-    final result = <String, List<Map<String, dynamic>>>{};
-    for (var event in events) {
-      if (!result.containsKey(event['id'])) {
-        result[event['id']] = [];
-      }
-      result[event['id']]!.add(event);
-    }
-    return result;
   }
 
   Future<void> _getCurrentUser() async {
@@ -130,7 +100,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
-    
+    print(eventData);
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
     print("This is create))))))))");
@@ -340,19 +310,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       appBar: AppBar(
         title: Text('Calendar'),
         actions: [
-          Consumer<SyncService>(
-            builder: (context, syncService, _) {
-              return IconButton(
-                icon: Icon(
-                  syncService.isSyncing ? Icons.sync : Icons.sync_disabled,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  syncService.syncInitialData();
-                },
-              );
-            },
-          ),
           IconButton(
             icon: Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
