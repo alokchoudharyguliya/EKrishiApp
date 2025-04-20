@@ -1,5 +1,5 @@
 const express = require('express');
-const admin = require('firebase-admin');
+// const admin = require('firebase-admin');
 const WebSocket = require('ws');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -26,22 +26,14 @@ const store = new MongoDBStore({
     collection: 'sessions',
 });
 
-// Middleware
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// File upload configuration
-const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpeg') {
-        cb(null, true);
-    } else {
-        cb(null, false);
-    }
-};
 
-const fileStorage = multer.diskStorage({
+const  { fileFilter } = require('./config/multerConfig.js');
+const  fileStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const dir = './uploads/profiles';
+        const dir = '../uploads/profiles';
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
@@ -60,7 +52,6 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
 });
 
-// CORS configuration
 const corsOptions = {
     origin: [
         'http://localhost:3000',
@@ -81,13 +72,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Firebase initialization
 const serviceAccount = require('./newscalendar-ac03a-firebase-adminsdk-fbsvc-ceee853a90.json');
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
-});
-
+// admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount),
+//     databaseURL: process.env.FIREBASE_DATABASE_URL
+// });
+const admin=require('./config/firebase.js');
 // Routes
 app.use(userRoutes);
 app.use(fileRoutes);
@@ -207,10 +197,6 @@ wss.on('connection', (ws, req) => {
 async function handleCreateEvent(eventData, ws, userId) {
     try {
         console.log(typeof (eventData.start_date));
-        // const parseLocalDate = (dateStr) => {
-        //     const [year, month, day] = dateStr.split('-').map(Number);
-        //     return new Date(year, month, day);
-        // };
 
         console.log(eventData.start_date);
         function parseDate(input) {
@@ -417,14 +403,14 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
                 message: "User ID is required."
             });
         }
-        
+
         if (role && !['student', 'faculty', 'other', 'admin'].includes(role)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid role specified."
             });
         }
-        
+
         const updateData = {
             name,
             email,
@@ -432,7 +418,7 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
             dob,
             role: role || 'student'
         };
-        
+
         if (req.file) {
             const uploadDir = path.join(__dirname, 'uploads', 'profiles');
             if (!fs.existsSync(uploadDir)) {
@@ -442,7 +428,7 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
             const fileExt = path.extname(req.file.originalname);
             const filename = `${userId}_${Date.now()}${fileExt}`;
             const filePath = path.join(uploadDir, filename);
-
+            console.log(typeof(req.file.path));
             await fs.promises.rename(req.file.path, filePath);
             updateData.photoUrl = `${process.env.BASE_URL}/profile/${filename}`;
 

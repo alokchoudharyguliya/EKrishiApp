@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:newscalendar/constants/constants.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'edit_profile_screen.dart';
+// import 'edit_profile_screen.dart';
 import '../main.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
@@ -35,12 +35,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   File? _cachedImageFile;
   String? _selectedRole;
   final FlutterSecureStorage _storage = FlutterSecureStorage();
-  // Controllers for editable fields
   late TextEditingController _nameController;
   late TextEditingController _emailController;
   late TextEditingController _phoneController;
   late TextEditingController _dobController;
-
+  FocusNode _focusNode = FocusNode();
   // Role options
   final List<String> _roleOptions = ['student', 'faculty', 'other', 'admin'];
 
@@ -53,6 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _dobController = TextEditingController();
     _loadInitialData();
     _fetchUserData();
+    _focusNode.canRequestFocus = false;
   }
 
   @override
@@ -238,9 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _saveProfileChanges() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     _errorMessage = null;
 
@@ -250,7 +248,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (userId == null) throw Exception('User not logged in');
 
       final dio = Dio();
-      // First create the basic form data
       final formData = FormData.fromMap({
         'userId': userId,
         'name': _nameController.text,
@@ -260,29 +257,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'role': _selectedRole,
       });
 
-      // Add the image file if selected
       if (_selectedImageFile != null) {
-        // Print debug information about the file
         print('Selected file path: ${_selectedImageFile!.path}');
         print('File exists: ${await _selectedImageFile!.exists()}');
         print('File size: ${await _selectedImageFile!.length()} bytes');
 
-        // Create the multipart file
         final multipartFile = await MultipartFile.fromFile(
           _selectedImageFile!.path,
           filename:
               'profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
           contentType: MediaType('image', 'jpeg'),
         );
-
-        // Add to form data - using the same field name ('image') that your backend expects
         formData.files.add(MapEntry('image', multipartFile));
-
-        // Debug print the form data files
-        print('FormData files count: ${formData.files.length}');
       }
 
-      // Debug print the complete form data
       print('Sending FormData with fields: ${formData.fields}');
       print('Sending FormData with files: ${formData.files.map((f) => f.key)}');
 
@@ -293,17 +281,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             options: Options(
               contentType: 'multipart/form-data',
               headers: {
-                "Content-Type": "multipart/form-data",
-                "Accept": "application/json",
+                "Authorization":
+                    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MDE2ZmM4MWM1YmIwN2U5MTQ3MTMzYyIsImVtYWlsIjoiYWxva3NpbmdAZ21haWwuY29tIiwiaWF0IjoxNzQ0OTc2NDMxfQ.mPX5kQz6Ppujvz8-MCiiPinK_B6k_7T_WNJ1sri_DeE",
               },
             ),
-            onSendProgress: (sent, total) {
-              print(
-                'Upload progress: ${(sent / total * 100).toStringAsFixed(0)}%',
-              );
-            },
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       print('Response received: ${response.statusCode}');
       print('Response data: ${response.data}');
@@ -330,7 +313,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         userService.cacheUserData(updatedUserData);
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully')),
         );
@@ -339,9 +321,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       print('Error in _saveProfileChanges: $e');
-      setState(() {
-        _errorMessage = 'Error saving profile: ${e.toString()}';
-      });
+      setState(() => _errorMessage = 'Error saving profile: ${e.toString()}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error saving profile: ${e.toString()}')),
       );
@@ -390,6 +370,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     TextInputType? keyboardType,
     bool isDateField = false,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -400,9 +383,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.only(bottom: 4.0),
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurface.withOpacity(0.7),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -415,29 +397,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderSide: BorderSide(color: colorScheme.outline),
                         ),
                         contentPadding: EdgeInsets.symmetric(
                           vertical: 14,
                           horizontal: 16,
                         ),
                         filled: true,
-                        fillColor: Colors.grey[50],
+                        fillColor: colorScheme.surfaceVariant,
                         suffixIcon: Icon(
                           Icons.calendar_today,
-                          color: Colors.grey[600],
+                          color: colorScheme.onSurface.withOpacity(0.6),
                         ),
                       ),
                       child: Text(
                         controller.text.isNotEmpty
                             ? controller.text
                             : 'Select date',
-                        style: TextStyle(
-                          fontSize: 16,
+                        style: textTheme.bodyLarge?.copyWith(
                           color:
                               controller.text.isNotEmpty
-                                  ? Colors.grey[800]
-                                  : Colors.grey[500],
+                                  ? colorScheme.onSurface
+                                  : colorScheme.onSurface.withOpacity(0.5),
                         ),
                       ),
                     ),
@@ -445,18 +426,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : TextFormField(
                     controller: controller,
                     keyboardType: keyboardType,
-                    style: TextStyle(fontSize: 16, color: Colors.grey[800]),
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: colorScheme.onSurface,
+                    ),
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
+                        borderSide: BorderSide(color: colorScheme.outline),
                       ),
                       contentPadding: EdgeInsets.symmetric(
                         vertical: 14,
                         horizontal: 16,
                       ),
                       filled: true,
-                      fillColor: Colors.grey[50],
+                      fillColor: colorScheme.surfaceVariant,
                     ),
                     validator: (value) {
                       if (label == 'Phone' && value!.isNotEmpty) {
@@ -480,7 +463,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : Container(
                 padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: colorScheme.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -488,10 +471,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Text(
                       '$label: ',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
+                        color: colorScheme.onSurface.withOpacity(0.7),
                       ),
                     ),
                     Expanded(
@@ -499,12 +481,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         controller.text.isNotEmpty
                             ? controller.text
                             : 'Not provided',
-                        style: TextStyle(
-                          fontSize: 16,
+                        style: textTheme.bodyLarge?.copyWith(
                           color:
                               controller.text.isNotEmpty
-                                  ? Colors.grey[800]
-                                  : Colors.grey[500],
+                                  ? colorScheme.onSurface
+                                  : colorScheme.onSurface.withOpacity(0.5),
                         ),
                       ),
                     ),
@@ -517,12 +498,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileImageWidget() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: 120,
       height: 120,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.grey[300]!, width: 2),
+        border: Border.all(
+          color: colorScheme.outline.withOpacity(0.3),
+          width: 2,
+        ),
       ),
       child: ClipOval(
         child:
@@ -542,8 +528,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
                 : _userData?['photoUrl'] == null
                 ? Container(
-                  color: Colors.grey[100],
-                  child: Icon(Icons.person, size: 60, color: Colors.grey[400]),
+                  color: colorScheme.surfaceVariant,
+                  child: Icon(
+                    Icons.person,
+                    size: 60,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 )
                 : Image.network(
                   _userData!['photoUrl'],
@@ -559,16 +549,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ? loadingProgress.cumulativeBytesLoaded /
                                     loadingProgress.expectedTotalBytes!
                                 : null,
+                        color: colorScheme.primary,
                       ),
                     );
                   },
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      color: Colors.grey[100],
+                      color: colorScheme.surfaceVariant,
                       child: Icon(
                         Icons.person,
                         size: 60,
-                        color: Colors.grey[400],
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     );
                   },
@@ -578,6 +569,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildRoleField() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -588,9 +582,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.only(bottom: 4.0),
               child: Text(
                 'Role',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurface.withOpacity(0.7),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -601,23 +594,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
+                    borderSide: BorderSide(color: colorScheme.outline),
                   ),
                   contentPadding: EdgeInsets.symmetric(
                     vertical: 14,
                     horizontal: 16,
                   ),
                   filled: true,
-                  fillColor: Colors.grey[50],
+                  fillColor: colorScheme.surfaceVariant,
                 ),
-                dropdownColor: Colors.white,
-                style: TextStyle(fontSize: 16, color: Colors.grey[800]),
+                dropdownColor: colorScheme.surface,
+                style: textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onSurface,
+                ),
                 items:
                     _roleOptions.map((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
                         child: Text(
                           value[0].toUpperCase() + value.substring(1),
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurface,
+                          ),
                         ),
                       );
                     }).toList(),
@@ -630,7 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : Container(
                 padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: colorScheme.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -638,10 +636,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Text(
                       'Role: ',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
+                        color: colorScheme.onSurface.withOpacity(0.7),
                       ),
                     ),
                     Expanded(
@@ -652,12 +649,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             .split(' ')
                             .map((s) => s[0].toUpperCase() + s.substring(1))
                             .join(' '),
-                        style: TextStyle(
-                          fontSize: 16,
+                        style: textTheme.bodyLarge?.copyWith(
                           color:
                               (_userData?['role'] ?? '').isNotEmpty
-                                  ? Colors.grey[800]
-                                  : Colors.grey[500],
+                                  ? colorScheme.onSurface
+                                  : colorScheme.onSurface.withOpacity(0.5),
                         ),
                       ),
                     ),
@@ -671,24 +667,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Profile',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
         elevation: 0,
+        backgroundColor: colorScheme.primary,
         actions: [
           IconButton(
             icon: Icon(_isEditing ? Icons.save : Icons.edit),
-            color: Colors.blue[700],
+            color: Colors.white,
             iconSize: 24,
             onPressed: _isEditing ? _saveProfileChanges : _toggleEdit,
           ),
           if (_isEditing)
             IconButton(
               icon: Icon(Icons.close),
-              color: Colors.grey[600],
+              color: Colors.white,
               iconSize: 24,
               onPressed: _isLoading ? null : _toggleEdit,
             ),
@@ -697,18 +700,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body:
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[700]!),
-                ),
+                child: CircularProgressIndicator(color: colorScheme.primary),
               )
               : _errorMessage != null
               ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
-
                   child: Text(
                     _errorMessage!,
-                    style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: colorScheme.error,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -730,7 +732,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 right: 0,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.blue[700],
+                                    color: colorScheme.primary,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
@@ -743,7 +745,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   child: IconButton(
                                     icon: Icon(
                                       Icons.camera_alt,
-                                      color: Colors.white,
+                                      color: colorScheme.onPrimary,
                                       size: 20,
                                     ),
                                     onPressed:

@@ -19,20 +19,6 @@ class Event {
     this.description,
   });
 
-  /// Create an Event object from JSON
-  factory Event.fromJson(Map<String, dynamic> json) {
-    return Event(
-      id: json['_id'],
-      title: json['title'],
-      userId: json['userId'],
-      startDate: DateTime.parse(json['start_date']),
-      endDate:
-          json['end_date'] != null ? DateTime.parse(json['end_date']) : null,
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
-    );
-  }
-
   /// Convert Event object to JSON for sending to backend
   Map<String, dynamic> toJson() {
     return {
@@ -41,18 +27,51 @@ class Event {
       'start_date': startDate.toIso8601String(),
       'end_date': endDate?.toIso8601String(),
       'description': description,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'title': title,
-      'description': description,
-      'start_date': startDate.toIso8601String(),
-      // 'time': time?.format(
-      // const TimeOfDayFormat.H_colon_mm_space_a(),
-      // ), // or just time?.toString(),
-    };
+  factory Event.fromJson(Map<String, dynamic> json) {
+    try {
+      return Event(
+        id: json['id'] ?? json['_id'] ?? '',
+        title: json['title'] ?? '',
+        userId: json['userId'] ?? json['user_id'] ?? json['createdBy'] ?? '',
+        startDate: _parseDateTime(json['start_date'] ?? json['startDate']),
+        endDate:
+            json['end_date'] != null || json['endDate'] != null
+                ? _parseDateTime(json['end_date'] ?? json['endDate'])
+                : null,
+        createdAt: _parseDateTime(
+          json['createdAt'] ?? json['created_at'] ?? DateTime.now().toString(),
+        ),
+        updatedAt: _parseDateTime(
+          json['updatedAt'] ?? json['updated_at'] ?? DateTime.now().toString(),
+        ),
+        description: json['description'],
+      );
+    } catch (e) {
+      throw FormatException('Failed to parse Event: $e\nJSON: $json');
+    }
+  }
+
+  static DateTime _parseDateTime(dynamic date) {
+    if (date is DateTime) return date;
+    if (date == null) return DateTime.now();
+
+    try {
+      // Try parsing ISO format first
+      if (date is String) {
+        return DateTime.parse(date);
+      }
+
+      // Handle other cases if needed
+      return DateTime.now();
+    } catch (e) {
+      print('Failed to parse date: $date');
+      return DateTime.now();
+    }
   }
 
   Event copyWith({
@@ -86,7 +105,4 @@ class Event {
       description: other.description,
     );
   }
-
-  // In your Event model
-  String get uniqueId => id ?? DateTime.now().millisecondsSinceEpoch.toString();
 }

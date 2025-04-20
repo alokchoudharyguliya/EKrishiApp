@@ -2,15 +2,18 @@ import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:newscalendar/constants/constants.dart';
 import 'package:table_calendar/table_calendar.dart';
-
-// import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
-// import './edit_event_screen.dart';
-import 'package:provider/provider.dart';
+
 import 'package:newscalendar/main.dart';
 import 'package:newscalendar/auth_service.dart';
+import '../color/color.dart';
+import 'update_event_screen.dart';
+import 'create_event_screen.dart';
+import '../services/sync_service.dart';
+import '../services/local_db_service.dart';
 
 class FullScreenCalendar extends StatefulWidget {
   @override
@@ -29,11 +32,42 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   String? _currentUserId;
   String _newEventTitle = '';
   String _newEventDescription = '';
+  FocusNode _focusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
+    _initializeData();
     _getCurrentUser();
     _connectToWebSocket();
+    _focusNode.canRequestFocus = false;
+  }
+
+  Future<void> _initializeData() async {
+    // Load from local DB first
+    final localDb = Provider.of<HiveLocalDbService>(context, listen: false);
+    final events = await localDb.getEvents();
+
+    setState(() {
+      _events = _processEvents(events);
+    });
+
+    // Then try to sync with server
+    final syncService = Provider.of<SyncService>(context, listen: false);
+    await syncService.syncInitialData();
+  }
+
+  Map<String, List<Map<String, dynamic>>> _processEvents(
+    List<Map<String, dynamic>> events,
+  ) {
+    final result = <String, List<Map<String, dynamic>>>{};
+    for (var event in events) {
+      if (!result.containsKey(event['id'])) {
+        result[event['id']] = [];
+      }
+      result[event['id']]!.add(event);
+    }
+    return result;
   }
 
   Future<void> _getCurrentUser() async {
@@ -42,16 +76,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
     try {
       dynamic userData = await userService.getUserData();
-      // print("${userData}------================");
       if (userData != null && userData['_id'] != null) {
         setState(() {
           _currentUserId = userData['_id'];
         });
-        // print("${_currentUserId}>>>>>>>>");
       }
     } catch (e) {
-      // print("$R{_currentUserId}<<<<<<");
-      print('Error getting user data: $e');
+      // print('Error getting user data: $e');
     }
   }
 
@@ -99,11 +130,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
-    print(eventData);
+    
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
-
+    print("This is create))))))))");
     if (_channel == null || token == null) {
+      print("This )");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Not connected or not authenticated'),
@@ -112,14 +144,14 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       );
       return;
     }
-
     try {
+      print("${eventData}");
       final message = json.encode({
         "action": "createEvent",
         "event": eventData,
         "token": token, // Include the token for authentication
       });
-
+      print(token);
       _channel!.sink.add(message);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,8 +177,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       _channel?.sink.close();
       final authService = Provider.of<AuthService>(context, listen: false);
       final token = authService.token;
-      // print('}===========${token}===========');
-      // Include token in the WebSocket connection URL
       _channel = IOWebSocketChannel.connect(
         '$apiBaseUrl?token=$token',
         headers: {'Authorization': 'Bearer $token'},
@@ -171,7 +201,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     }
   }
 
-  // Update the _processWebSocketMessage to handle different message types
   void _processWebSocketMessage(dynamic message) {
     try {
       final responseData = json.decode(message);
@@ -243,7 +272,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         );
       }
     } catch (e) {
-      print('Error processing WebSocket message: $e');
+      // print('Error processing WebSocket message: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error processing server message'),
@@ -303,14 +332,29 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final dayBoxHeight = (screenHeight - 150) / 6;
+    final dayBoxHeight = (screenHeight - 150) / 7;
+    final calendarColors = Theme.of(context).extension<CalendarColors>()!;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Calendar'),
         actions: [
+          Consumer<SyncService>(
+            builder: (context, syncService, _) {
+              return IconButton(
+                icon: Icon(
+                  syncService.isSyncing ? Icons.sync : Icons.sync_disabled,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  syncService.syncInitialData();
+                },
+              );
+            },
+          ),
           IconButton(
-            icon: Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
               _channel?.sink.add('{"action":"refresh"}');
             },
@@ -319,10 +363,15 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       ),
       body: TableCalendar(
         firstDay: DateTime.utc(2000, 1, 1),
+        availableCalendarFormats: const {CalendarFormat.month: 'Month'},
+        sixWeekMonthsEnforced: true,
         lastDay: DateTime.utc(2050, 12, 31),
         focusedDay: _focusedDay,
         selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
         onDaySelected: (selectedDay, focusedDay) {
+          if (selectedDay.month != _focusedDay.month) {
+            return;
+          }
           setState(() {
             _selectedDay = selectedDay;
             _focusedDay = focusedDay;
@@ -336,7 +385,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         },
         calendarFormat: CalendarFormat.month,
         eventLoader: (day) {
-          // Find events that match the selected day
           final dayEvents =
               _events.values.expand((eventList) => eventList).where((event) {
                 try {
@@ -351,54 +399,83 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         calendarStyle: CalendarStyle(
           markersMaxCount: 1,
           markerDecoration: BoxDecoration(
-            color: Colors.green,
+            color: calendarColors.otherUserFont,
             shape: BoxShape.circle,
           ),
           markersAlignment: Alignment.bottomCenter,
           markersOffset: PositionedOffset(bottom: 2),
           cellMargin: EdgeInsets.all(2),
-          cellPadding: EdgeInsets.all(8),
-          defaultTextStyle: TextStyle(color: Colors.black),
-          weekendTextStyle: TextStyle(color: Colors.red),
+          cellPadding: EdgeInsets.all(4),
+          defaultTextStyle: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          weekendTextStyle: TextStyle(
+            color: isDarkMode ? Colors.red[200] : Colors.red,
+          ),
           defaultDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+            ),
           ),
           todayDecoration: BoxDecoration(
-            color: Colors.blue[100],
+            color: calendarColors.todayEventBackground,
             borderRadius: BorderRadius.circular(8),
           ),
           selectedDecoration: BoxDecoration(
-            color: Colors.blue,
-            borderRadius: BorderRadius.circular(8),
+            color: calendarColors.selectedEventBackground,
+            shape: BoxShape.circle,
           ),
           weekendDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+            ),
           ),
+          outsideTextStyle: TextStyle(color: calendarColors.differentMonthFont),
           outsideDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[200]!),
+            shape: BoxShape.circle,
+            color: calendarColors.differentMonthBackground,
           ),
           cellAlignment: Alignment.center,
         ),
         headerStyle: HeaderStyle(
           titleCentered: true,
           formatButtonVisible: false,
-          leftChevronIcon: Icon(Icons.chevron_left, size: 32),
-          rightChevronIcon: Icon(Icons.chevron_right, size: 32),
-          headerPadding: EdgeInsets.symmetric(vertical: 16),
-          titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          leftChevronIcon: Icon(
+            Icons.chevron_left,
+            color: Colors.white,
+            size: 32,
+          ),
+          rightChevronIcon: Icon(
+            Icons.chevron_right,
+            color: Colors.white,
+            size: 32,
+          ),
+          headerPadding: EdgeInsets.symmetric(vertical: 8),
+          titleTextStyle: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
         daysOfWeekStyle: DaysOfWeekStyle(
-          weekdayStyle: TextStyle(fontWeight: FontWeight.bold),
+          weekdayStyle: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
           weekendStyle: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.red,
+            color: isDarkMode ? Colors.red[200] : Colors.red,
           ),
         ),
         calendarBuilders: CalendarBuilders(
           defaultBuilder: (context, day, focusedDay) {
+            final isDifferentMonth = day.month != focusedDay.month;
+            if (isDifferentMonth) {
+              return _buildDifferentMonthDay(day, calendarColors);
+            }
+
             final isEventDay = _events.values
                 .expand((eventList) => eventList)
                 .any((event) {
@@ -409,61 +486,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                     return false;
                   }
                 });
-            final isWeekend = _isWeekend(day);
-            final hasUserEvent = _events.values
-                .expand((eventList) => eventList)
-                .where((event) {
-                  try {
-                    final eventDate = DateTime.parse(event['start_date']);
-                    print(event);
-                    return isSameDay(eventDate, day);
-                  } catch (e) {
-                    return false;
-                  }
-                })
-                .any((event) => event['userId'] == _currentUserId);
-            print('${_currentUserId}?????????????');
-            return Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  color:
-                      hasUserEvent
-                          ? Colors.orange.withOpacity(0.3)
-                          : isEventDay
-                          ? Colors.green.withOpacity(0.2)
-                          : null,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    day.day.toString(),
-                    style: TextStyle(
-                      fontSize: 18,
-                      color:
-                          isWeekend
-                              ? Colors.red
-                              : (hasUserEvent
-                                  ? Colors.orange[800]
-                                  : (isEventDay
-                                      ? Colors.green[800]
-                                      : Colors.black)),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-          todayBuilder: (context, day, focusedDay) {
-            final isEventDay = _events.values
-                .expand((eventList) => eventList)
-                .any((event) {
-                  try {
-                    final eventDate = DateTime.parse(event['start_date']);
-                    return isSameDay(eventDate, day);
-                  } catch (e) {
-                    return false;
-                  }
-                });
+
             final isWeekend = _isWeekend(day);
             final hasUserEvent = _events.values
                 .expand((eventList) => eventList)
@@ -482,11 +505,73 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 decoration: BoxDecoration(
                   color:
                       hasUserEvent
-                          ? Colors.orange.withOpacity(0.4)
+                          ? calendarColors.userBackground
                           : (isEventDay
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.blue[100]),
+                              ? calendarColors.otherUserBackground
+                              : null),
                   shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    day.day.toString(),
+                    style: TextStyle(
+                      fontSize: 18,
+                      color:
+                          isWeekend
+                              ? (isDarkMode ? Colors.red[200] : Colors.red)
+                              : (hasUserEvent
+                                  ? calendarColors.userFont
+                                  : (isEventDay
+                                      ? calendarColors.otherUserFont
+                                      : Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface)),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+          todayBuilder: (context, day, focusedDay) {
+            final isDifferentMonth = day.month != focusedDay.month;
+            if (isDifferentMonth) {
+              return _buildDifferentMonthDay(day, calendarColors);
+            }
+
+            final isEventDay = _events.values
+                .expand((eventList) => eventList)
+                .any((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                });
+
+            final isWeekend = _isWeekend(day);
+            final hasUserEvent = _events.values
+                .expand((eventList) => eventList)
+                .where((event) {
+                  try {
+                    final eventDate = DateTime.parse(event['start_date']);
+                    return isSameDay(eventDate, day);
+                  } catch (e) {
+                    return false;
+                  }
+                })
+                .any((event) => event['userId'] == _currentUserId);
+
+            return Center(
+              child: Container(
+                decoration: BoxDecoration(
+                  color:
+                      hasUserEvent
+                          ? calendarColors.userBackground
+                          : (isEventDay
+                              ? calendarColors.otherUserBackground
+                              : calendarColors.todayEventBackground),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
                   child: Text(
@@ -496,12 +581,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                       fontWeight: FontWeight.bold,
                       color:
                           isWeekend
-                              ? Colors.red[700]
+                              ? (isDarkMode ? Colors.red[200] : Colors.red)
                               : (hasUserEvent
-                                  ? Colors.orange[900]
+                                  ? calendarColors.userFont
                                   : (isEventDay
-                                      ? Colors.green[900]
-                                      : Colors.black)),
+                                      ? calendarColors.otherUserFont
+                                      : calendarColors.todayEventFont)),
                     ),
                   ),
                 ),
@@ -509,6 +594,15 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             );
           },
           selectedBuilder: (context, day, focusedDay) {
+            final isDifferentMonth = day.month != focusedDay.month;
+            if (isDifferentMonth) {
+              return _buildDifferentMonthDay(
+                day,
+                calendarColors,
+                isSelected: true,
+              );
+            }
+
             final isEventDay = _events.values
                 .expand((eventList) => eventList)
                 .any((event) {
@@ -519,6 +613,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                     return false;
                   }
                 });
+
             final hasUserEvent = _events.values
                 .expand((eventList) => eventList)
                 .where((event) {
@@ -536,50 +631,10 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 decoration: BoxDecoration(
                   color:
                       hasUserEvent
-                          ? Colors.orange
-                          : (isEventDay ? Colors.green : Colors.blue),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    day.day.toString(),
-                    style: TextStyle(fontSize: 18, color: Colors.white),
-                  ),
-                ),
-              ),
-            );
-          },
-          outsideBuilder: (context, day, focusedDay) {
-            final isEventDay = _events.values
-                .expand((eventList) => eventList)
-                .any((event) {
-                  try {
-                    final eventDate = DateTime.parse(event['start_date']);
-                    return isSameDay(eventDate, day);
-                  } catch (e) {
-                    return false;
-                  }
-                });
-            final isWeekend = _isWeekend(day);
-            final hasUserEvent = _events.values
-                .expand((eventList) => eventList)
-                .where((event) {
-                  try {
-                    final eventDate = DateTime.parse(event['start_date']);
-                    return isSameDay(eventDate, day);
-                  } catch (e) {
-                    return false;
-                  }
-                })
-                .any((event) => event['userId'] == _currentUserId);
-
-            return Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  color:
-                      hasUserEvent
-                          ? Colors.orange.withOpacity(0.1)
-                          : (isEventDay ? Colors.green.withOpacity(0.1) : null),
+                          ? calendarColors.userBackground
+                          : (isEventDay
+                              ? calendarColors.otherUserBackground
+                              : calendarColors.selectedEventBackground),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -587,23 +642,49 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                     day.day.toString(),
                     style: TextStyle(
                       fontSize: 18,
-                      color:
-                          isWeekend
-                              ? Colors.red[300]
-                              : (hasUserEvent
-                                  ? Colors.orange[400]
-                                  : (isEventDay
-                                      ? Colors.green[400]
-                                      : Colors.grey[400])),
+                      color: calendarColors.selectedEventFont,
                     ),
                   ),
                 ),
               ),
             );
           },
+          outsideBuilder: (context, day, focusedDay) {
+            return _buildDifferentMonthDay(day, calendarColors);
+          },
         ),
         daysOfWeekHeight: 40,
         rowHeight: dayBoxHeight,
+      ),
+    );
+  }
+
+  Widget _buildDifferentMonthDay(
+    DateTime day,
+    CalendarColors calendarColors, {
+    bool isSelected = false,
+  }) {
+    final isWeekend = _isWeekend(day);
+
+    return Center(
+      child: Container(
+        decoration: BoxDecoration(
+          color: calendarColors.differentMonthBackground,
+        ),
+        child: Center(
+          child: Text(
+            day.day.toString(),
+            style: TextStyle(
+              fontSize: 18,
+              color:
+                  isWeekend
+                      ? (Theme.of(context).brightness == Brightness.dark
+                          ? Colors.red[300]!
+                          : Colors.red[300]!)
+                      : calendarColors.differentMonthFont,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -638,7 +719,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             GestureDetector(
               onTap: _removeOverlay,
               child: Container(
-                color: Colors.black.withOpacity(0.3),
+                color: const Color.fromARGB(28, 0, 0, 0),
                 width: screenSize.width,
                 height: screenSize.height,
               ),
@@ -659,7 +740,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                       height: screenSize.height * 0.8,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -701,111 +782,42 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 SizedBox(
-                                                  width: 30,
-                                                  child: TextButton(
-                                                    child: Icon(
+                                                  width: 40, // Increased width
+                                                  child: IconButton(
+                                                    icon: Icon(
                                                       Icons.edit,
-                                                      color: Colors.blue,
+                                                      size:
+                                                          24, // Increased size
                                                     ),
+                                                    color:
+                                                        Theme.of(
+                                                          context,
+                                                        ).colorScheme.primary,
                                                     onPressed: () {
                                                       _removeOverlay();
-                                                      showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (
-                                                              context,
-                                                            ) => AlertDialog(
-                                                              title: Text(
-                                                                'Update Current Event',
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder:
+                                                              (
+                                                                context,
+                                                              ) => UpdateEventScreen(
+                                                                event: event,
+                                                                updateCallback:
+                                                                    _updateEventViaWebSocket,
                                                               ),
-                                                              content: SingleChildScrollView(
-                                                                child: Column(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    TextField(
-                                                                      decoration: InputDecoration(
-                                                                        labelText:
-                                                                            'Title',
-                                                                      ),
-                                                                      controller:
-                                                                          TextEditingController(
-                                                                            text:
-                                                                                event['title'],
-                                                                          ),
-                                                                      onChanged:
-                                                                          (
-                                                                            value,
-                                                                          ) =>
-                                                                              _newEventTitle =
-                                                                                  value,
-                                                                    ),
-                                                                    TextField(
-                                                                      decoration: InputDecoration(
-                                                                        labelText:
-                                                                            'Description',
-                                                                      ),
-                                                                      controller:
-                                                                          TextEditingController(
-                                                                            text:
-                                                                                event['description'],
-                                                                          ),
-                                                                      onChanged:
-                                                                          (
-                                                                            value,
-                                                                          ) =>
-                                                                              _newEventDescription =
-                                                                                  value,
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                              actions: [
-                                                                TextButton(
-                                                                  onPressed:
-                                                                      () => Navigator.pop(
-                                                                        context,
-                                                                      ),
-                                                                  child: Text(
-                                                                    'Cancel',
-                                                                  ),
-                                                                ),
-                                                                ElevatedButton(
-                                                                  onPressed: () {
-                                                                    final updates = {
-                                                                      "title":
-                                                                          _newEventTitle.isNotEmpty
-                                                                              ? _newEventTitle
-                                                                              : event['title'],
-                                                                      "description":
-                                                                          _newEventDescription.isNotEmpty
-                                                                              ? _newEventDescription
-                                                                              : event['description'],
-                                                                    };
-                                                                    _updateEventViaWebSocket(
-                                                                      updates,
-                                                                      event['id'],
-                                                                    );
-                                                                    Navigator.pop(
-                                                                      context,
-                                                                    );
-                                                                  },
-                                                                  child: Text(
-                                                                    'Update',
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
+                                                        ),
                                                       );
                                                     },
                                                   ),
                                                 ),
                                                 SizedBox(
-                                                  width: 30,
-                                                  child: TextButton(
-                                                    child: Icon(
+                                                  width: 40, // Increased width
+                                                  child: IconButton(
+                                                    icon: Icon(
                                                       Icons.delete,
+                                                      size:
+                                                          24, // Increased size
                                                       color: Colors.red,
                                                     ),
                                                     onPressed: () {
@@ -861,19 +873,30 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                             : SizedBox(width: 60),
                                     title: Container(
                                       width: double.infinity,
-                                      child: Text(event['title'] ?? 'No Title'),
+                                      child: Text(
+                                        event['title'] ?? 'No Title',
+                                        style: TextStyle(
+                                          fontSize: 18, // Larger font size
+                                          fontWeight: FontWeight.bold, // Bold
+                                        ),
+                                      ),
                                     ),
                                     subtitle: Container(
                                       width: double.infinity,
                                       child: Text(
                                         event['description'] ??
                                             'No Description',
+                                        style: TextStyle(
+                                          fontSize: 14, // Smaller font size
+                                          color: Colors.grey[600], // Grey color
+                                        ),
                                       ),
                                     ),
                                     trailing: SizedBox(
-                                      width: 20,
+                                      width: 30, // Increased width
                                       child: Icon(
                                         Icons.event,
+                                        size: 24, // Increased size
                                         color:
                                             isUserEvent
                                                 ? Colors.orange
@@ -908,63 +931,30 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                           ),
                           SizedBox(height: 20),
                           FloatingActionButton(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
                             onPressed: () {
                               _removeOverlay();
-                              showDialog(
-                                context: context,
-                                builder:
-                                    (context) => AlertDialog(
-                                      title: Text('Add New Event'),
-                                      content: SingleChildScrollView(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            TextField(
-                                              decoration: InputDecoration(
-                                                labelText: 'Title',
-                                              ),
-                                              onChanged:
-                                                  (value) =>
-                                                      _newEventTitle = value,
-                                            ),
-                                            TextField(
-                                              decoration: InputDecoration(
-                                                labelText: 'Description',
-                                              ),
-                                              onChanged:
-                                                  (value) =>
-                                                      _newEventDescription =
-                                                          value,
-                                            ),
-                                          ],
-                                        ),
+                              final newEvent = {
+                                "title": _newEventTitle,
+                                "start_date": DateFormat(
+                                  "dd-MM-yyyy",
+                                ).format(selectedDay),
+                                "description": _newEventDescription,
+                                "end_date": DateFormat(
+                                  "dd-MM-yyyy",
+                                ).format(selectedDay),
+                              };
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder:
+                                      (context) => CreateEventScreen(
+                                        event: newEvent,
+                                        createCallback:
+                                            _createEventViaWebSocket,
                                       ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed:
-                                              () => Navigator.pop(context),
-                                          child: Text('Cancel'),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            final newEvent = {
-                                              "title": _newEventTitle,
-                                              "start_date": DateFormat(
-                                                "dd-MM-yyyy",
-                                              ).format(selectedDay),
-                                              "description":
-                                                  _newEventDescription,
-                                              "end_date": DateFormat(
-                                                "dd-MM-yyyy",
-                                              ).format(selectedDay),
-                                            };
-                                            _createEventViaWebSocket(newEvent);
-                                            Navigator.pop(context);
-                                          },
-                                          child: Text('Create'),
-                                        ),
-                                      ],
-                                    ),
+                                ),
                               );
                             },
                             child: Icon(Icons.add),
@@ -987,8 +977,9 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
   @override
   void dispose() {
-    _channel?.sink.close();
+    // _channel?.sink.close();
     _removeOverlay();
+    _animationController?.dispose(); // Add this if not already present
     super.dispose();
   }
 }

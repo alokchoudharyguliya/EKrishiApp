@@ -24,13 +24,15 @@ class _LoginState extends State<Login> {
   String? _errorMessage;
   bool _isLoading = false;
   bool _obscurePassword = true;
-
+  FocusNode _focusNode = FocusNode();
   @override
   void initState() {
     super.initState();
     final authForm = Provider.of<AuthFormProvider>(context, listen: false);
     email.text = authForm.email;
     password.text = authForm.password;
+
+    _focusNode.canRequestFocus = false;
   }
 
   @override
@@ -117,6 +119,13 @@ class _LoginState extends State<Login> {
                     listen: false,
                   ).updateEmail(value);
                 },
+                focusNode: _focusNode,
+                onTap: () {
+                  setState(() {
+                    _focusNode.canRequestFocus = true;
+                  });
+                  FocusScope.of(context).requestFocus(_focusNode);
+                },
                 decoration: const InputDecoration(
                   hintText: "Enter Email",
                   prefixIcon: Icon(Icons.email),
@@ -142,6 +151,13 @@ class _LoginState extends State<Login> {
                     context,
                     listen: false,
                   ).updatePassword(value);
+                },
+                focusNode: _focusNode,
+                onTap: () {
+                  setState(() {
+                    _focusNode.canRequestFocus = true;
+                  });
+                  FocusScope.of(context).requestFocus(_focusNode);
                 },
                 decoration: InputDecoration(
                   hintText: "Enter Password",

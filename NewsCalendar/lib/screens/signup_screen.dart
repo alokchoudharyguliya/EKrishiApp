@@ -23,13 +23,14 @@ class _SignupScreenState extends State<SignupScreen> {
   String? _errorMessage;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-
+  FocusNode _focusNode = FocusNode();
   @override
   void initState() {
     super.initState();
     final authForm = Provider.of<AuthFormProvider>(context, listen: false);
     email.text = authForm.email;
     password.text = authForm.password;
+    _focusNode.canRequestFocus = false;
   }
 
   @override
@@ -127,6 +128,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       listen: false,
                     ).updateEmail(value);
                   },
+                  focusNode: _focusNode,
+                  onTap: () {
+                    setState(() {
+                      _focusNode.canRequestFocus = true;
+                    });
+                    FocusScope.of(context).requestFocus(_focusNode);
+                  },
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email),
@@ -152,6 +160,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       context,
                       listen: false,
                     ).updatePassword(value);
+                  },
+                  focusNode: _focusNode,
+                  onTap: () {
+                    setState(() {
+                      _focusNode.canRequestFocus = true;
+                    });
+                    FocusScope.of(context).requestFocus(_focusNode);
                   },
                   decoration: InputDecoration(
                     labelText: 'Password',

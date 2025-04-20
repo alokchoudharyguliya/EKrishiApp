@@ -1,10 +1,8 @@
 import 'package:newscalendar/constants/constants.dart';
-
 import './screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'auth_service.dart';
 import 'package:provider/provider.dart';
 import 'main.dart';
@@ -24,12 +22,14 @@ class _HomepageState extends State<Homepage> {
   final DateTime _today = DateTime.now();
   String? authToken;
   File? _cachedImageFile;
+  FocusNode _focusNode = FocusNode();
   @override
   void initState() {
     super.initState();
     // Initialize authToken from widget.token
     authToken = widget.token;
     Provider.of<AuthService>(context, listen: false).checkAuthStatus();
+    _focusNode.canRequestFocus = false;
   }
 
   Future<void> _clearProfileImageCache() async {
@@ -65,8 +65,6 @@ class _HomepageState extends State<Homepage> {
         }
       }
 
-      // Perform client-side cleanup
-      // await authService.clearAuthToken();
       await authService.logout();
       await userService.clearUserData();
       // Navigate to login screen
@@ -147,13 +145,17 @@ class _HomepageState extends State<Homepage> {
         return Scaffold(
           key: _scaffoldKey,
           appBar: AppBar(
+            backgroundColor: Theme.of(context).colorScheme.primary,
             title: const Text("Home"),
             leading: IconButton(
-              icon: const Icon(Icons.menu),
+              icon: Icon(Icons.menu, color: Colors.white),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
             actions: [
-              IconButton(icon: const Icon(Icons.logout), onPressed: signout),
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                onPressed: signout,
+              ),
             ],
           ),
           endDrawer: Drawer(
@@ -162,7 +164,7 @@ class _HomepageState extends State<Homepage> {
               children: [
                 DrawerHeader(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   child: const Text(
                     'Menu Options',
@@ -171,7 +173,7 @@ class _HomepageState extends State<Homepage> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.home),
-                  title: const Text('Home'),
+                  title: Text('Home'),
                   onTap: () {
                     Navigator.pop(context);
                   },
@@ -239,7 +241,7 @@ class _HomepageState extends State<Homepage> {
                       horizontal: 35,
                       vertical: 15,
                     ),
-                    backgroundColor: Theme.of(context).primaryColor,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                   ),
                   onPressed: () => _showDateBottomSheet(context),
                   child: const Text(
@@ -249,8 +251,12 @@ class _HomepageState extends State<Homepage> {
                 ),
                 const SizedBox(height: 20),
                 FloatingActionButton(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   onPressed: () => Navigator.pushNamed(context, '/calendar'),
-                  child: const Icon(Icons.calendar_view_day_rounded),
+                  child: Icon(
+                    Icons.calendar_view_day_rounded,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),

@@ -37,6 +37,10 @@ const eventSchema = new mongoose.Schema({
 }, {
   timestamps: true, // Adds `createdAt` and `updatedAt` fields automatically
 });
+eventSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
 
 // Create the Event model
 const Event = mongoose.model('Event', eventSchema);
