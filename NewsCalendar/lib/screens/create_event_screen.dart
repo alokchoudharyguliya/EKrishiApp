@@ -46,6 +46,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           _descriptionController.text.isNotEmpty
               ? _descriptionController.text
               : widget.event['description'],
+      "userId": widget.event['userId'],
       "start_date": widget.event['start_date'],
       "end_date": widget.event['end_date'],
     };

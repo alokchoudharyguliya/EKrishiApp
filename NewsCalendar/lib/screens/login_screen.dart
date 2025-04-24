@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:newscalendar/constants/constants.dart';
-import 'package:provider/provider.dart';
-import '../auth_form_provider.dart';
+import '../utils/imports.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+
 import 'package:crypto/crypto.dart';
-import 'package:newscalendar/auth_service.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:newscalendar/main.dart';
 
 class Login extends StatefulWidget {
@@ -152,12 +149,12 @@ class _LoginState extends State<Login> {
                     listen: false,
                   ).updatePassword(value);
                 },
-                focusNode: _focusNode,
+                // focusNode: _focusNode,
                 onTap: () {
-                  setState(() {
-                    _focusNode.canRequestFocus = true;
-                  });
-                  FocusScope.of(context).requestFocus(_focusNode);
+                  // setState(() {
+                  // _focusNode.canRequestFocus = true;
+                  // });
+                  // FocusScope.of(context).requestFocus(_focusNode);
                 },
                 decoration: InputDecoration(
                   hintText: "Enter Password",

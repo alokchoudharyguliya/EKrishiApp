@@ -1,19 +1,7 @@
-import '../widgets/mini_edit.dart';
-import 'dart:io';
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:newscalendar/constants/constants.dart';
-import '../models/events.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_vertexai/firebase_vertexai.dart';
-import '../firebase_options.dart';
-import 'package:uuid/uuid.dart'; // Add this import
-import 'package:provider/provider.dart';
-import 'package:newscalendar/auth_service.dart';
-import 'package:newscalendar/main.dart';
+import '../utils/imports.dart';
+import 'package:flutter/material.dart';
+import '../models/events.dart' as eventModel;
 
 class ImageUploadScreen extends StatefulWidget {
   @override
@@ -25,7 +13,7 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
   String _extractedText = "";
   bool _isLoading = false;
   String _vertexAIResponse = "";
-  List<Event> _events = [];
+  List<eventModel.Event> _events = [];
   bool _isFirebaseInitialized = false;
   static const String _apiKey = 'AIzaSyAZjj3WDWIPST9r4W0T5QNVv80SGH6jMSM';
   final Uuid _uuid = Uuid(); // UUID generator
@@ -98,7 +86,7 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     }
   }
 
-  List<Event> parseEventsFromResponse(String responseText) {
+  List<eventModel.Event> parseEventsFromResponse(String responseText) {
     try {
       final cleanedString =
           responseText.replaceAll('```json', '').replaceAll('```', '').trim();
@@ -119,7 +107,8 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
         final startDate = parseDate(eventData['start_date']) ?? DateTime.now();
         final endDate = parseDate(eventData['end_date']) ?? startDate;
 
-        return Event(
+        return eventModel.Event(
+          lastUpdated: DateTime.now(),
           id: _uuid.v4(), // Generate unique ID
           title: eventData['event'] ?? 'Untitled Event',
           startDate: startDate,
@@ -136,7 +125,7 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     }
   }
 
-  Future<void> _saveEventsToBackend(List<Event> events) async {
+  Future<void> _saveEventsToBackend(List<eventModel.Event> events) async {
     final authService = Provider.of<AuthService>(context, listen: false);
     final userService = Provider.of<UserService>(context, listen: false);
 
@@ -334,7 +323,7 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
             trailing: IconButton(
               icon: Icon(Icons.edit),
               onPressed: () async {
-                final updatedEvent = await showDialog<Event>(
+                final updatedEvent = await showDialog<eventModel.Event>(
                   context: context,
                   builder: (context) {
                     return Dialog(child: MiniEdit(event: event, editing: true));
@@ -359,3 +348,6 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     ],
   );
 }
+
+
+

@@ -1,12 +1,6 @@
-import 'package:newscalendar/constants/constants.dart';
-import './screens/profile_screen.dart';
+import './utils/imports.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import 'auth_service.dart';
-import 'package:provider/provider.dart';
-import 'main.dart';
-import 'dart:io';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -131,7 +125,7 @@ class _HomepageState extends State<Homepage> {
   @override
   Widget build(BuildContext context) {
     final userService = Provider.of<UserService>(context);
-
+    final isOnline = context.watch<ConnectivityProvider>().isOnline;
     return FutureBuilder(
       future:
           userService
@@ -155,6 +149,10 @@ class _HomepageState extends State<Homepage> {
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white),
                 onPressed: signout,
+              ),
+              Icon(
+                isOnline ? Icons.wifi : Icons.wifi_off,
+                color: isOnline ? Colors.green : Colors.red,
               ),
             ],
           ),

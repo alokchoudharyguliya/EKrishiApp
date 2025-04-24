@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:newscalendar/constants/constants.dart';
 import '../models/events.dart';
@@ -9,6 +7,7 @@ import 'dart:convert';
 import 'package:newscalendar/main.dart';
 import 'package:provider/provider.dart';
 import 'package:newscalendar/auth_service.dart';
+import '../services/user_service.dart';
 
 class EditEventScreen extends StatefulWidget {
   final Event? event;
@@ -106,15 +105,6 @@ class _EditEventScreenState extends State<EditEventScreen> {
         ).showSnackBar(SnackBar(content: Text('Event name is required')));
         return;
       }
-
-      // if (_startDateController.text.isEmpty) {
-      //   ScaffoldMessenger.of(
-      //     context,
-      //   ).showSnackBar(SnackBar(content: Text('Start date is required')));
-      //   return;
-      // }
-
-      // Get the current user's ID
       final userService = Provider.of<UserService>(context, listen: false);
       final userId = await userService.getUserId();
       print(userId);
@@ -157,6 +147,7 @@ class _EditEventScreenState extends State<EditEventScreen> {
                 description: _descriptionController.text,
               )
               : Event(
+                lastUpdated: DateTime.now(),
                 id: DateTime.now().toString(), // or generate UUID
                 title: _eventNameController.text,
                 startDate: startDate,

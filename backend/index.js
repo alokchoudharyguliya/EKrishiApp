@@ -30,8 +30,8 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 
-const  { fileFilter } = require('./config/multerConfig.js');
-const  fileStorage = multer.diskStorage({
+const { fileFilter } = require('./config/multerConfig.js');
+const fileStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         const dir = '../uploads/profiles';
         if (!fs.existsSync(dir)) {
@@ -77,8 +77,9 @@ const serviceAccount = require('./newscalendar-ac03a-firebase-adminsdk-fbsvc-cee
 //     credential: admin.credential.cert(serviceAccount),
 //     databaseURL: process.env.FIREBASE_DATABASE_URL
 // });
-const admin=require('./config/firebase.js');
+const admin = require('./config/firebase.js');
 // Routes
+
 app.use(userRoutes);
 app.use(fileRoutes);
 app.use(eventRoutes);
@@ -387,11 +388,6 @@ async function sendEventsToClient(ws) {
         }));
     }
 }
-// Utility function to format date
-function formatDate(date) {
-    return new Date(date).toISOString().split('T')[0];
-}
-
 // File upload endpoint (unchanged from your original)
 app.post('/save-user', upload.single('image'), async (req, res) => {
     try {
@@ -428,7 +424,7 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
             const fileExt = path.extname(req.file.originalname);
             const filename = `${userId}_${Date.now()}${fileExt}`;
             const filePath = path.join(uploadDir, filename);
-            console.log(typeof(req.file.path));
+            console.log(typeof (req.file.path));
             await fs.promises.rename(req.file.path, filePath);
             updateData.photoUrl = `${process.env.BASE_URL}/profile/${filename}`;
 
@@ -482,32 +478,40 @@ app.post('/save-user', upload.single('image'), async (req, res) => {
         });
     }
 });
+
 // Root endpoint
 app.get('/', (req, res) => {
     res.send('Node.js Firestore API is running');
 });
 
+app.get('/ping', (req, res) => {
+    // console.log('pong');
+    res.status(200).send('pong');
+});
+
 // Database connection and server startup
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log("Connected to users database");
-        return mongoose.createConnection(process.env.MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
-    })
-    .then(calendarDb => {
-        console.log("Connected to calendar database");
-        const PORT = process.env.PORT || 3000;
-        server.listen(PORT, '0.0.0.0', () => {
-            console.log(`Server running on http://localhost:${PORT}`);
-            console.log(`WebSocket server running on ws://localhost:${PORT}`);
-            console.log(`Accessible from Flutter via:
+mongoose.connect(process.env.MONGODB_URI).then(() => {
+    console.log("Connected to users database");
+    return mongoose.createConnection(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+    });
+}).then(calendarDb => {
+    console.log("Connected to calendar database");
+    const PORT = process.env.PORT || 3000;
+    server.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+        console.log(`WebSocket server running on ws://localhost:${PORT}`);
+        console.log(`Accessible from My Flutter via:
         - http://localhost:${PORT} (iOS simulator)
         - http://10.0.2.2:${PORT} (Android emulator)
         - Your actual local IP for physical devices`);
-        });
-    })
-    .catch(err => {
-        console.log(err);
     });
+}).catch(err => {
+    console.log(err);
+});
+
+// Utility function to format date
+function formatDate(date) {
+    return new Date(date).toISOString().split('T')[0];
+}

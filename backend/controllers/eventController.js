@@ -1,5 +1,6 @@
-const event = require('../models/event');
+const Event = require('../models/event');
 const mongoose = require('mongoose');
+const addDays=require('date-fns').addDays;
 const { Types: { ObjectId } } = require('mongoose');
 require('dotenv').config();
 const User = require('../models/user');
@@ -23,12 +24,12 @@ exports.getEvents = async (req, res) => {
 exports.getEventByEventId = async (req, res) => {
   try {
     const userId = req.body.userId;
-    const eventId=req.params.id;
+    const eventId = req.params.id;
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
     }
 
-    const events = await event.findOne({ userId,eventId: eventId});
+    const events = await Event.findOne({ userId, eventId: eventId });
 
     res.status(200).json({ success: true, events });
   } catch (err) {
@@ -38,7 +39,9 @@ exports.getEventByEventId = async (req, res) => {
 }
 exports.deleteEvent = async (req, res) => {
   try {
-    const { eventId, userId } = req.body;
+    console.log(req.body);
+    const { userId } = req.body;
+    const {eventId}=req.params;
 
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
@@ -48,7 +51,7 @@ exports.deleteEvent = async (req, res) => {
       return res.status(400).json({ message: "Event ID is required." });
     }
 
-    const deletedEvent = await event.findByIdAndDelete({ _id: eventId, userId: userId });
+    const deletedEvent = await Event.deleteOne({ _id: eventId, userId: userId });
 
     if (!deletedEvent) {
       return res.status(404).json({ message: "Event not found." });
@@ -60,41 +63,7 @@ exports.deleteEvent = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error." });
   }
 };
-exports.addEvent = async (req, res) => {
-  try {
-    const { userId ,end_date,start_date, title} = req.body;
-    const newEvent = new event({ ...req.body, userId: userId, start_date: new Date(start_date), end_date: new Date(end_date) });
-
-    if (!userId || !title || !start_date || !end_date) {
-      return res.status(400).json({ message: "userId, title, and date are required." });
-    }
-    await newEvent.save();
-    res.status(201).json({
-      success: true,
-      message: "Event added successfully",
-      event: newEvent
-    });
-
-  } catch (err) {
-    console.error(err);
-
-    // Handle Mongoose validation errors (e.g., invalid date)
-    if (err.name === 'ValidationError') {
-      return res.status(400).json({
-        success: false,
-        message: err.message // Example: "Event date must be in the future"
-      });
-    }
-
-    // Generic server error
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
-  }
-};
 exports.addEvents = async (req, res) => {
-  console.log("hay")
   try {
     const events = req.body.events;
 
@@ -121,9 +90,9 @@ exports.addEvents = async (req, res) => {
     });
 
     // Insert all events into MongoDB
-    const insertedEvents = await event.insertMany(processedEvents);
+    const insertedEvents = await Event.insertMany(processedEvents);
 
-    // Return success response (remove Mongoose-specific fields like __v)
+
     res.status(201).json({
       message: 'Events saved successfully',
       count: insertedEvents.length,
@@ -143,13 +112,14 @@ exports.addEvents = async (req, res) => {
 exports.updateEvent = async (req, res) => {
   try {
     const { userId } = req.body;
+    const updates = req.body;
     const eventId = req.params.id;
     if (!eventId) {
       return res.status(400).json({ message: "Event ID is required." });
     }
-    const updatedEvent = await event.findOneAndUpdate(
+    const updatedEvent = await Event.findOneAndUpdate(
       { _id: eventId, userId: userId },
-      req.body,
+      updates,
       { new: true, runValidators: true }
     );
     if (!updatedEvent) {
@@ -160,11 +130,92 @@ exports.updateEvent = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error." });
   }
 
-
-
-
-
 };
+exports.addEvent = async (req, res) => {
+  try {
+    const { userId, title, description, start_date, end_date } = req.body;
+    
+    // Validate required fields
+    if (!userId || !title || !start_date || !end_date) {
+      return res.status(400).json({ 
+        success: false,
+        message: "userId, title, start_date, and end_date are required." 
+      });
+    }
 
+    // Validate date formats and logic
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Please use ISO 8601 format (YYYY-MM-DD)"
+      });
+    }
 
+    if (startDate > endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "End date must be after start date"
+      });
+    }
 
+    // Create new event with adjusted dates (if needed)
+    const newEvent = new Event({ 
+      ...req.body,
+      userId,
+      start_date: addDays(startDate, 1), // Adjust dates as needed
+      end_date: addDays(endDate, 1)
+    });
+
+    await newEvent.save();
+
+    // Broadcast the new event to all connected clients via WebSocket
+    if (req.wss) {
+      req.wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: "eventCreated",
+            message: "New event created",
+            event: newEvent
+          }));
+        }
+      });
+    }
+
+    console.log("Event added successfully");
+    res.status(201).json({
+      success: true,
+      message: "Event added successfully",
+      event: newEvent
+    });
+
+  } catch (err) {
+    console.error("Error adding event:", err);
+
+    // Handle specific error types
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: messages
+      });
+    }
+
+    if (err.code === 11000) { // MongoDB duplicate key error
+      return res.status(400).json({
+        success: false,
+        message: "Event with similar details already exists"
+      });
+    }
+
+    // Generic server error
+    res.status(500).json({
+      success: false,
+      message: "Server error while adding event",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};

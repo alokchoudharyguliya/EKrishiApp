@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:newscalendar/main.dart';
+import '../utils/imports.dart';
 
 class SettingsPage extends StatefulWidget {
   final Function(String) onThemeChanged;
@@ -26,7 +27,7 @@ class _SettingsPageState extends State<SettingsPage> {
     'Science': false,
     'Health': true,
   };
-  
+
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context, listen: false);

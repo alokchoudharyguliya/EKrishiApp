@@ -15,22 +15,26 @@ const eventSchema = new mongoose.Schema({
   start_date: {
     type: Date,
     required: [true, 'Date is required'],
-    validate: {
-      validator: function(start_date) {
-        // Custom validation: Date must not be in the past
-        return start_date >= new Date();
-      },
-      message: 'Start date must be in the future',
-    },
+    // validate: {
+    //   validator: function(start_date) {
+    //     // Custom validation: Date must not be in the past
+    //     return start_date >= new Date();
+    //   },
+    //   message: 'Start date must be in the future',
+    // },
   },
+  isDeleted:String,
+  changeType:String,
+  lastUpdated:String,
+  isSynced:Boolean,
   end_date: {
     type: Date,
-    validate: {
-      validator: function(end_date) {
-        return end_date >= this.start_date;
-      },
-      message: 'End date must be in the future',
-    },
+    // validate: {
+    //   validator: function(end_date) {
+    //     return end_date >= this.start_date;
+    //   },
+    //   message: 'End date must be in the future',
+    // },
   },
   description: { type: String, required: false },
 

@@ -1,17 +1,7 @@
-import 'package:intl/intl.dart';
+import '../utils/imports.dart';
+import '../models/events.dart' as eventModel;
 import 'package:flutter/material.dart';
-import 'package:newscalendar/constants/constants.dart';
-import 'package:table_calendar/table_calendar.dart';
-import 'dart:convert';
-import 'package:provider/provider.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/io.dart';
-
-import 'package:newscalendar/main.dart';
-import 'package:newscalendar/auth_service.dart';
-import '../color/color.dart';
-import 'update_event_screen.dart';
-import 'create_event_screen.dart';
+import 'package:http/http.dart' as http;
 
 class FullScreenCalendar extends StatefulWidget {
   @override
@@ -20,10 +10,13 @@ class FullScreenCalendar extends StatefulWidget {
 
 class _FullScreenCalendarState extends State<FullScreenCalendar> {
   DateTime _focusedDay = DateTime.now();
+  late final Box<eventModel.Event> _eventsBox;
+  late final Box<eventModel.Event> _pendingOperationsBox;
   DateTime? _selectedDay;
+  final Uuid _uuid = Uuid();
   OverlayEntry? _overlayEntry;
   AnimationController? _animationController;
-  Map<String, List<Map<String, dynamic>>> _events = {};
+  Map<String, List<eventModel.Event>> _events = {};
   List<String> _eventIds = []; // Changed to store event IDs instead of dates
   final String apiBaseUrl = '$SOCK_BASE_URL';
   WebSocketChannel? _channel;
@@ -31,13 +24,250 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   String _newEventTitle = '';
   String _newEventDescription = '';
   FocusNode _focusNode = FocusNode();
+  late AuthService _authService;
+  bool _isWebSocketInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _getCurrentUser();
+    _setupConnectivityListener();
+    _initializeHiveBoxes();
+    _authService = Provider.of<AuthService>(context, listen: false);
     _connectToWebSocket();
     _focusNode.canRequestFocus = false;
+  }
+
+  void _setupConnectivityListener() {
+    final connectivity = Provider.of<ConnectivityProvider>(
+      context,
+      listen: false,
+    );
+    connectivity.addListener(_handleConnectivityChange);
+    if (connectivity.isOnline) {
+      _initializeWebSocket();
+    }
+  }
+
+  void _handleConnectivityChange() {
+    final connectivity = Provider.of<ConnectivityProvider>(
+      context,
+      listen: false,
+    );
+    if (connectivity.isOnline && !_isWebSocketInitialized) {
+      _initializeWebSocket();
+      _processPendingEvents();
+    } else if (!connectivity.isOnline) {
+      _channel?.sink.close();
+      _channel = null;
+      _isWebSocketInitialized = false;
+    }
+  }
+
+  void _processPendingEvents() async {
+    if (!Provider.of<ConnectivityProvider>(context, listen: false).isOnline)
+      return;
+
+    final pendingEvents = _pendingOperationsBox.values.toList();
+
+    for (final event in pendingEvents) {
+      try {
+        switch (event.changeType) {
+          case "CREATE":
+            await _syncEventToRemote(event);
+            break;
+          case "UPDATE":
+            await _syncUpdateToRemote(event);
+            break;
+          case "DELETE":
+            await _syncDeleteToRemote(event.id, event);
+            break;
+        }
+      } catch (e) {
+        debugPrint('Failed to sync pending event ${event.id}: $e');
+      }
+    }
+  }
+
+  Future<void> _syncEventToRemote(eventModel.Event event) async {
+    try {
+      // First update local copy to mark as syncing
+      final syncingEvent = event.copyWith(isSynced: false);
+      _eventsBox.put(syncingEvent.id, syncingEvent);
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
+      print("+++++++++++++++++");
+      print(event.toJson());
+      // Make the API call
+      final response = await http.post(
+        Uri.parse('$BASE_URL/'),
+        headers: {
+          'Content-Type': 'application/json',
+          "Authorization": "Bearer ${token}",
+        },
+        body: jsonEncode(event.toJson()),
+      );
+      print(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // _channel?.sink.add('{"action":"refresh"}');
+        // Update local copy to mark as synced
+        _channel?.stream.listen((message) {
+          _processWebSocketMessage(message);
+        });
+        print(response.body);
+        final syncedEvent = event.copyWith(isSynced: true);
+        _eventsBox.put(syncedEvent.id, syncedEvent);
+
+        // Remove from pending queue if it exists there
+        if (_pendingOperationsBox.containsKey(event.id)) {
+          _pendingOperationsBox.delete(event.id);
+        }
+      } else {
+        // If sync fails, add to pending queue
+        final failedEvent = event.copyWith(
+          isSynced: false,
+          changeType: "CREATE",
+        );
+        _pendingOperationsBox.put(failedEvent.id, failedEvent);
+        _showSyncStatusSnackbar("Sync failed. Will retry later.");
+      }
+    } catch (e) {
+      // On error, add to pending queue
+      final failedEvent = event.copyWith(isSynced: false, changeType: "CREATE");
+      _pendingOperationsBox.put(failedEvent.id, failedEvent);
+      _showSyncStatusSnackbar("Network error. Will retry when online.");
+    }
+  }
+
+  // void _updateEvent(eventModel.Event event) {}
+
+  Future<void> _syncUpdateToRemote(eventModel.Event event) async {
+    try {
+      // First update local copy to mark as syncing
+      final syncingEvent = event.copyWith(isSynced: false);
+      _eventsBox.put(syncingEvent.id, syncingEvent);
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
+      // Make the API call
+      final response = await http.put(
+        Uri.parse('$BASE_URL/${event.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          "Authorization": "Bearer ${token}",
+        },
+        body: jsonEncode(event.toJson()),
+      );
+      print("${response.body}ppppppppppppp");
+
+      if (response.statusCode == 200) {
+        // Update local copy to mark as synced
+        final syncedEvent = event.copyWith(isSynced: true);
+        _eventsBox.put(syncedEvent.id, syncedEvent);
+
+        // Remove from pending queue if it exists there
+        if (_pendingOperationsBox.containsKey(event.id)) {
+          _pendingOperationsBox.delete(event.id);
+        }
+      } else {
+        // If sync fails, add to pending queue
+        final failedEvent = event.copyWith(
+          isSynced: false,
+          changeType: "UPDATE",
+        );
+        _pendingOperationsBox.put(failedEvent.id, failedEvent);
+        _showSyncStatusSnackbar("Update failed. Will retry later.");
+      }
+    } catch (e) {
+      // On error, add to pending queue
+      final failedEvent = event.copyWith(isSynced: false, changeType: "UPDATE");
+      _pendingOperationsBox.put(failedEvent.id, failedEvent);
+      _showSyncStatusSnackbar("Network error. Will retry when online.");
+    }
+  }
+
+  void _showSyncStatusSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: Duration(seconds: 2)),
+    );
+  }
+
+  Future<void> _syncDeleteToRemote(
+    String eventId,
+    eventModel.Event event,
+  ) async {
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
+      // Make the API call
+      print(event.toJson());
+      print("${eventId}lllllllllllllllll");
+      print(event.userId);
+      final response = await http.delete(
+        Uri.parse('$BASE_URL/$eventId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'userId': event.userId}),
+      );
+      print("${response.body}ppppppppppppp");
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        // Remove from pending queue if it exists there
+        if (_pendingOperationsBox.containsKey(eventId)) {
+          _pendingOperationsBox.delete(eventId);
+        }
+      } else {
+        // If sync fails, add to pending queue
+        final failedEvent = event.copyWith(
+          isSynced: false,
+          changeType: "DELETE",
+        );
+        _pendingOperationsBox.put(failedEvent.id, failedEvent);
+        _showSyncStatusSnackbar("Deletion failed. Will retry later.");
+      }
+    } catch (e) {
+      // On error, add to pending queue
+      final failedEvent = event.copyWith(isSynced: false, changeType: "DELETE");
+      _pendingOperationsBox.put(failedEvent.id, failedEvent);
+      _showSyncStatusSnackbar("Network error. Will retry when online.");
+    }
+  }
+
+  Future<void> _initializeHiveBoxes() async {
+    _eventsBox = Hive.box<eventModel.Event>('events');
+    _pendingOperationsBox = Hive.box<eventModel.Event>('pending-operations');
+  }
+
+  void _initializeWebSocket() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final token = authService.token;
+
+    try {
+      _channel = IOWebSocketChannel.connect(
+        '$SOCK_BASE_URL?token=$token',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      _channel?.stream.listen(
+        (message) {
+          final data = jsonDecode(message);
+          if (data['type'] == 'ack') {
+            _pendingOperationsBox.delete(data['id']);
+          }
+        },
+        onError: (err) {
+          debugPrint('WebSocket error: $err');
+          _channel?.sink.close();
+          _channel = null;
+          _isWebSocketInitialized = false;
+        },
+      );
+      _isWebSocketInitialized = true;
+    } catch (e) {
+      debugPrint('WebSocket initialization error: $e');
+      _isWebSocketInitialized = false;
+    }
   }
 
   Future<void> _getCurrentUser() async {
@@ -57,53 +287,155 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   Future<void> _updateEventViaWebSocket(
-    Map<String, dynamic> updates,
+    eventModel.Event updatedEvent,
     String eventId,
   ) async {
+    print(updatedEvent.toJson());
+    // Always update local database first
+    final isOnline =
+        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
+    final eventToUpdate = updatedEvent.copyWith(isSynced: isOnline);
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
 
-    if (_channel == null || token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Not connected or not authenticated'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
-      return;
-    }
+    // Always update local database first
+    _eventsBox.put(eventToUpdate.id, eventToUpdate);
 
-    try {
-      final message = json.encode({
-        "action": "updateEvent",
-        "eventId": eventId,
-        "updates":
-            updates, // Changed from "event" to "updates" to match backend
-        "token": token,
-      });
+    if (isOnline) {
+      // If online, try to sync immediately
+      try {
+        final message = json.encode({
+          "action": "createEvent",
+          "event": updatedEvent,
+          "token": token, // Include the token for authentication
+        });
+        print(token);
+        // _channel!.sink.add(message);
 
-      _channel!.sink.add(message);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Updating event...'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update event: $e'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Creating event...'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+        // _channel!.sink.add(message);
+      } catch (e) {
+        print(e);
+      }
+      _syncUpdateToRemote(eventToUpdate);
+    } else {
+      // If offline, add to pending queue with isSynced = false
+      try {
+        final pendingEvent = eventToUpdate.copyWith(
+          isSynced: false,
+          changeType: "UPDATE",
+        );
+
+        if (_channel == null || token == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Not connected or not authenticated'),
+              duration: Duration(milliseconds: 90),
+            ),
+          );
+          return;
+        }
+
+        _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
+        _showSyncStatusSnackbar("Update saved locally. Will sync when online.");
+        // final message = json.encode({
+        //   "action": "updateEvent",
+        //   "eventId": eventId,
+        //   "updates":
+        //       updatedEvent, // Changed from "event" to "updates" to match backend
+        //   "token": token,
+        // });
+
+        // _channel!.sink.add(message);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Updating event...'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update event: $e'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+      }
     }
   }
 
   Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
-    print(eventData);
+    print("---------------------------------");
+    print(DateFormat("dd-MM-yyyy").parse(eventData['end_date']).runtimeType);
+    print(eventData['start_date'].runtimeType);
+    print(eventData['userId'].runtimeType);
+    final isOnline =
+        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
+    print(
+      "dddddddddddddddddddd${(DateFormat("dd-MM-yyyy").parse(eventData['start_date']))}",
+    );
+    final newEvent = eventModel.Event.create(
+      id: _uuid.v4(),
+      title: eventData['title'],
+      description: eventData['description'],
+      startDate: DateFormat("dd-MM-yyyy").parse(eventData['start_date']),
+      userId: _currentUserId,
+      changeType: "CREATE",
+      endDate: DateFormat("dd-MM-yyyy").parse(eventData['end_date']),
+    );
+    print("-------------------------------${isOnline}");
+    // _addEvent(newEvent);
+    final eventToStore = newEvent.copyWith(isSynced: isOnline);
+    _eventsBox.put(eventToStore.id, eventToStore);
     print("This is create))))))))");
+    if (isOnline) {
+      // If online, try to sync immediately
+      try {
+        final message = json.encode({
+          "action": "createEvent",
+          "event": eventData.toString(),
+          "token": token, // Include the token for authentication
+        });
+        print(token);
+        // _channel!.sink.add(message);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Creating event...'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+        // _channel!.sink.add(message);
+      } catch (e) {
+        print(e);
+      }
+      _syncEventToRemote(eventToStore);
+    } else {
+      // If offline, add to pending queue with isSynced = false
+      try {
+        final pendingEvent = eventToStore.copyWith(
+          isSynced: false,
+          changeType: "CREATE",
+        );
+        print("${eventData}");
+        _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
+        _showSyncStatusSnackbar("Event saved locally. Will sync when online.");
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create event: $e'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+      }
+    }
     if (_channel == null || token == null) {
       print("This )");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -113,30 +445,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         ),
       );
       return;
-    }
-    try {
-      print("${eventData}");
-      final message = json.encode({
-        "action": "createEvent",
-        "event": eventData,
-        "token": token, // Include the token for authentication
-      });
-      print(token);
-      _channel!.sink.add(message);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Creating event...'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to create event: $e'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
     }
   }
 
@@ -154,6 +462,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
       _channel?.stream.listen(
         (message) {
+          print(message);
           _processWebSocketMessage(message);
         },
         onError: (error) {
@@ -177,130 +486,187 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       print('WebSocket message: $responseData');
 
       if (responseData["type"] == "events") {
-        // Handle events list update
-        final events = <String, List<Map<String, dynamic>>>{};
-        final eventIds = <String>[];
+        print(">>>>>>>>>>");
+        final newEvents = <String, List<eventModel.Event>>{};
+        final newEventIds = <String>[];
 
         for (var eventData in responseData["data"]) {
-          if (!events.containsKey(eventData['id'])) {
-            events[eventData['id']] = [];
-            eventIds.add(eventData['id']);
+          final eventId = eventData['id'].toString();
+          print("%%%%%%%%");
+          if (!_events.containsKey(eventId)) {
+            newEvents[eventId] = [];
+            newEventIds.add(eventId);
+            print("Adding new event ID: $eventId");
           }
-          events[eventData['id']]!.add(eventData);
+
+          newEvents[eventId]!.add(eventModel.Event.fromJson(eventData));
         }
 
         setState(() {
-          _events = events;
-          _eventIds = eventIds;
+          _events.addAll(newEvents);
+          _eventIds.addAll(newEventIds);
+          _eventIds = _eventIds.toSet().toList();
         });
       } else if (responseData["type"] == "eventCreated") {
         // Handle successful event creation
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Event created successfully'),
-            duration: Duration(milliseconds: 90),
+            duration: Duration(seconds: 2),
           ),
         );
-        // Refresh events to include the newly created one
-        _channel?.sink.add('{"action":"refresh"}');
+        // Refresh the entire state
+        setState(() {
+          _channel?.sink.add('{"action":"refresh"}');
+        });
       } else if (responseData["type"] == "eventUpdated") {
         // Handle successful event update
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Event updated successfully'),
-            duration: Duration(milliseconds: 90),
+            duration: Duration(seconds: 2),
           ),
         );
 
-        // If the response contains the updated event, update local state
-        if (responseData["event"] != null) {
-          final updatedEvent = responseData["event"];
-          setState(() {
-            if (_events.containsKey(updatedEvent["id"])) {
-              // Replace the existing event with the updated one
-              _events[updatedEvent["id"]] = [updatedEvent];
-            }
-          });
-        } else {
-          // If no event data in response, refresh the entire list
-          _channel?.sink.add('{"action":"refresh"}');
-        }
-      } else if (responseData["type"] == "error") {
-        // Handle errors with more detailed message from backend
-        String errorMessage = 'Error occurred';
-        if (responseData["message"] != null) {
-          errorMessage = responseData["message"];
-        } else if (responseData["error"] != null) {
-          errorMessage = responseData["error"];
-        }
-
+        // Refresh the state
+        setState(() {
+          if (responseData["event"] != null) {
+            final updatedEvent = eventModel.Event.fromJson(
+              responseData["event"],
+            );
+            _events[updatedEvent.id] = [updatedEvent];
+          } else {
+            _channel?.sink.add('{"action":"refresh"}');
+          }
+        });
+      } else if (responseData["type"] == "eventDeleted") {
+        // Handle successful event deletion
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage),
-            duration: Duration(milliseconds: 50),
+            content: Text('Event deleted successfully'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Refresh the state
+        setState(() {
+          if (responseData["eventId"] != null) {
+            final eventId = responseData["eventId"].toString();
+            _events.remove(eventId);
+            _eventIds.remove(eventId);
+          } else {
+            _channel?.sink.add('{"action":"refresh"}');
+          }
+        });
+      } else if (responseData["type"] == "error") {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(responseData["message"] ?? 'Error occurred'),
+            duration: Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      // print('Error processing WebSocket message: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error processing server message'),
-          duration: Duration(milliseconds: 90),
+          content: Text('Error processing server message: $e'),
+          duration: Duration(seconds: 2),
         ),
       );
     }
   }
 
-  Future<void> _deleteEventViaWebSocket(String eventId) async {
+  Future<void> _deleteEventViaWebSocket(
+    String eventId,
+    eventModel.Event event,
+  ) async {
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
     print(token);
     print(_channel);
-    if (_channel == null || token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Not connected or not authenticated'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
-      return;
-    }
+    final isOnline =
+        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
+    _eventsBox.delete(eventId);
+    if (isOnline) {
+      try {
+        final message = json.encode({
+          "action": "deleteEvent",
+          "eventId": event.id,
+          "event": event,
+          "token": token, // Include the token for authentication
+        });
+        print(token);
+        // _channel!.sink.add(message);
+        print(message);
 
-    try {
-      final message = json.encode({
-        "action": "deleteEvent",
-        "eventId": eventId,
-        "token": token,
-      });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleting event...'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+        // _channel!.sink.add(message);
+        _syncDeleteToRemote(eventId, event);
+      } catch (e) {
+        print(e);
+      }
+    } else {
+      // If offline, add to pending queue with isSynced = false
+      try {
+        final pendingEvent = event.copyWith(
+          isSynced: false,
+          changeType: "DELETE",
+        );
+        _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
+        _showSyncStatusSnackbar(
+          "Deletion saved locally. Will sync when online.",
+        );
+        if (_channel == null || token == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Not connected or not authenticated'),
+              duration: Duration(milliseconds: 90),
+            ),
+          );
+          return;
+        }
 
-      _channel!.sink.add(message);
+        // final message = json.encode({
+        //   "action": "deleteEvent",
+        //   "eventId": eventId,
+        //   "token": token,
+        // });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Deleting event...'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to delete event: $e'),
-          duration: Duration(milliseconds: 90),
-        ),
-      );
+        // _channel!.sink.add(message);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleting event...'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete event: $e'),
+            duration: Duration(milliseconds: 90),
+          ),
+        );
+      }
     }
   }
 
   void _removeOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
+    _channel?.sink.close();
     _animationController?.dispose();
     _animationController = null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final isOnline = context.watch<ConnectivityProvider>().isOnline;
     final screenHeight = MediaQuery.of(context).size.height;
     final dayBoxHeight = (screenHeight - 150) / 7;
     final calendarColors = Theme.of(context).extension<CalendarColors>()!;
@@ -314,7 +680,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             icon: Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
               _channel?.sink.add('{"action":"refresh"}');
+              setState(() {});
             },
+          ),
+          Icon(
+            isOnline ? Icons.wifi : Icons.wifi_off,
+            color: isOnline ? Colors.green : Colors.red,
           ),
         ],
       ),
@@ -345,7 +716,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           final dayEvents =
               _events.values.expand((eventList) => eventList).where((event) {
                 try {
-                  final eventDate = DateTime.parse(event['start_date']);
+                  final eventDate = event.startDate;
                   return isSameDay(day, eventDate);
                 } catch (e) {
                   return false;
@@ -437,7 +808,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .expand((eventList) => eventList)
                 .any((event) {
                   try {
-                    final eventDate = DateTime.parse(event['start_date']);
+                    final eventDate = event.startDate;
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
@@ -449,13 +820,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .expand((eventList) => eventList)
                 .where((event) {
                   try {
-                    final eventDate = DateTime.parse(event['start_date']);
+                    final eventDate = event.startDate;
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
                   }
                 })
-                .any((event) => event['userId'] == _currentUserId);
+                .any((event) => event.userId == _currentUserId);
 
             return Center(
               child: Container(
@@ -499,7 +870,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .expand((eventList) => eventList)
                 .any((event) {
                   try {
-                    final eventDate = DateTime.parse(event['start_date']);
+                    final eventDate = event.startDate;
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
@@ -511,13 +882,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .expand((eventList) => eventList)
                 .where((event) {
                   try {
-                    final eventDate = DateTime.parse(event['start_date']);
+                    final eventDate = event.startDate;
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
                   }
                 })
-                .any((event) => event['userId'] == _currentUserId);
+                .any((event) => event.userId == _currentUserId);
 
             return Center(
               child: Container(
@@ -564,7 +935,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .expand((eventList) => eventList)
                 .any((event) {
                   try {
-                    final eventDate = DateTime.parse(event['start_date']);
+                    final eventDate = event.startDate;
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
@@ -575,13 +946,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 .expand((eventList) => eventList)
                 .where((event) {
                   try {
-                    final eventDate = DateTime.parse(event['start_date']);
+                    final eventDate = event.startDate;
                     return isSameDay(eventDate, day);
                   } catch (e) {
                     return false;
                   }
                 })
-                .any((event) => event['userId'] == _currentUserId);
+                .any((event) => event.userId == _currentUserId);
 
             return Center(
               child: Container(
@@ -662,7 +1033,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     final dayEvents =
         _events.values.expand((eventList) => eventList).where((event) {
           try {
-            final eventDate = DateTime.parse(event['start_date']);
+            final eventDate = event.startDate;
             return isSameDay(eventDate, selectedDay);
           } catch (e) {
             return false;
@@ -715,7 +1086,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                             DateFormat.yMMMMd().format(selectedDay),
                             style: TextStyle(fontSize: 18),
                           ),
-                          SizedBox(height: 30, child: Text("Hey")),
+                          // SizedBox(height: 30, child: Text("Hey")),
                           if (dayEvents.isNotEmpty) ...[
                             Text(
                               'Events:',
@@ -731,7 +1102,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                 itemBuilder: (context, index) {
                                   final event = dayEvents[index];
                                   final isUserEvent =
-                                      event['userId'] == _currentUserId;
+                                      event.userId == _currentUserId;
                                   return ListTile(
                                     leading:
                                         isUserEvent
@@ -809,7 +1180,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                                                   ),
                                                                   onPressed: () {
                                                                     _deleteEventViaWebSocket(
-                                                                      event['id'],
+                                                                      event.id,
+                                                                      event,
                                                                     );
                                                                     Navigator.pop(
                                                                       context,
@@ -831,7 +1203,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                     title: Container(
                                       width: double.infinity,
                                       child: Text(
-                                        event['title'] ?? 'No Title',
+                                        event.title ?? 'No Title',
                                         style: TextStyle(
                                           fontSize: 18, // Larger font size
                                           fontWeight: FontWeight.bold, // Bold
@@ -841,8 +1213,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                     subtitle: Container(
                                       width: double.infinity,
                                       child: Text(
-                                        event['description'] ??
-                                            'No Description',
+                                        event.description ?? 'No Description',
                                         style: TextStyle(
                                           fontSize: 14, // Smaller font size
                                           color: Colors.grey[600], // Grey color
@@ -892,7 +1263,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                 Theme.of(context).colorScheme.primary,
                             onPressed: () {
                               _removeOverlay();
+                              print(
+                                "_currentUserId_currentUserId_currentUserId",
+                              );
+                              print(_currentUserId);
                               final newEvent = {
+                                "userId": _currentUserId,
                                 "title": _newEventTitle,
                                 "start_date": DateFormat(
                                   "dd-MM-yyyy",
@@ -934,7 +1310,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
   @override
   void dispose() {
-    // _channel?.sink.close();
+    _channel?.sink.close();
     _removeOverlay();
     _animationController?.dispose(); // Add this if not already present
     super.dispose();

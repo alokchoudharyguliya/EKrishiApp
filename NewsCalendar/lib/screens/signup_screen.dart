@@ -1,6 +1,7 @@
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:newscalendar/constants/constants.dart';
+import '../utils/imports.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -76,7 +77,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (response.statusCode == 201) {
         var myToken = responseData['token'];
         final userId =
-            responseData['userId']; // Make sure your API returns this
+            responseData['user']['_id']; // Make sure your API returns this
         print(userId);
 
         // Store user data using UserService

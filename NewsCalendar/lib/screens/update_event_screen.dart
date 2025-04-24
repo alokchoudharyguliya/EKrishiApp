@@ -1756,12 +1756,13 @@
 // // }
 
 // // // ... [keep ColorPickerDialog implementation unchanged] ...
-
+import '../utils/imports.dart';
+import '../models/events.dart' as eventModel;
 import 'package:flutter/material.dart';
 
 class UpdateEventScreen extends StatefulWidget {
-  final Map<String, dynamic> event;
-  final Function(Map<String, dynamic>, String) updateCallback;
+  final eventModel.Event event;
+  final Function(eventModel.Event, String) updateCallback;
 
   const UpdateEventScreen({
     Key? key,
@@ -1781,9 +1782,9 @@ class _UpdateEventScreenState extends State<UpdateEventScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.event['title'] ?? '');
+    _titleController = TextEditingController(text: widget.event.title ?? '');
     _descriptionController = TextEditingController(
-      text: widget.event['description'] ?? '',
+      text: widget.event.description ?? '',
     );
   }
 
@@ -1796,18 +1797,32 @@ class _UpdateEventScreenState extends State<UpdateEventScreen> {
   }
 
   void _saveChanges() {
-    final updates = {
-      "title":
+    // final updates = {
+    //   "title":
+    //       _titleController.text.isNotEmpty
+    //           ? _titleController.text
+    //           : widget.event['title'],
+    //   "description":
+    //       _descriptionController.text.isNotEmpty
+    //           ? _descriptionController.text
+    //           : widget.event['description'],
+    // };
+    final updatedEvent = new eventModel.Event.create(
+      id: widget.event.id,
+      title:
           _titleController.text.isNotEmpty
               ? _titleController.text
-              : widget.event['title'],
-      "description":
+              : widget.event.title,
+      description:
           _descriptionController.text.isNotEmpty
               ? _descriptionController.text
-              : widget.event['description'],
-    };
-
-    widget.updateCallback(updates, widget.event['id']);
+              : widget.event.description,
+      startDate: widget.event.startDate,
+      endDate: widget.event.endDate,
+      userId: widget.event.userId,
+      changeType: "UPDATE",
+    );
+    widget.updateCallback(updatedEvent, widget.event.id);
     Navigator.pop(context);
   }
 

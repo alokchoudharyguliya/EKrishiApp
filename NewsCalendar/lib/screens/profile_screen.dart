@@ -2,10 +2,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import '../utils/imports.dart';
 import 'package:newscalendar/constants/constants.dart';
 import 'dart:convert';
 import 'dart:io';
-// import 'edit_profile_screen.dart';
 import '../main.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
@@ -51,7 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _phoneController = TextEditingController();
     _dobController = TextEditingController();
     _loadInitialData();
-    _fetchUserData();
+    // _fetchUserData();
     _focusNode.canRequestFocus = false;
   }
 
@@ -85,19 +85,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
-
-  // Future<void> _loadInitialData() async {
-  //   final userService = Provider.of<UserService>(context, listen: false);
-  //   if (userService.cachedUserData != null) {
-  //     setState(() {
-  //       _userData = userService.cachedUserData;
-  //       _updateControllers();
-  //     });
-  //     // Load cached image if available
-  //     await _loadCachedProfileImage();
-  //   }
-  //   await _fetchUserData();
-  // }
 
   Future<void> _loadInitialData() async {
     final userService = Provider.of<UserService>(context, listen: false);
@@ -148,17 +135,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _fetchUserData() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    var token = authService.token;
+    token =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MDE2ZmM4MWM1YmIwN2U5MTQ3MTMzYyIsImVtYWlsIjoiYWxva3NpbmdAZ21haWwuY29tIiwiaWF0IjoxNzQ0OTc2NDMxfQ.mPX5kQz6Ppujvz8-MCiiPinK_B6k_7T_WNJ1sri_DeE";
+    // print(token);
     if (!_isRefreshing) setState(() => _isLoading = true);
     _errorMessage = null;
-
+    print("HEYHEYHEYHEY");
     try {
       final userService = Provider.of<UserService>(context, listen: false);
       final userId = await userService.getUserId();
       if (userId == null) throw Exception('User not logged in');
-
+      print(token);
       final response = await http.post(
         Uri.parse('$BASE_URL/get-user'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          "Authorization": "Bearer ${token}",
+        },
         body: json.encode({'userId': userId}),
       );
 
@@ -245,6 +240,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final userService = Provider.of<UserService>(context, listen: false);
       final userId = await userService.getUserId();
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
       if (userId == null) throw Exception('User not logged in');
 
       final dio = Dio();
@@ -264,8 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         final multipartFile = await MultipartFile.fromFile(
           _selectedImageFile!.path,
-          filename:
-              'profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          filename: '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
           contentType: MediaType('image', 'jpeg'),
         );
         formData.files.add(MapEntry('image', multipartFile));
@@ -280,10 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             data: formData,
             options: Options(
               contentType: 'multipart/form-data',
-              headers: {
-                "Authorization":
-                    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MDE2ZmM4MWM1YmIwN2U5MTQ3MTMzYyIsImVtYWlsIjoiYWxva3NpbmdAZ21haWwuY29tIiwiaWF0IjoxNzQ0OTc2NDMxfQ.mPX5kQz6Ppujvz8-MCiiPinK_B6k_7T_WNJ1sri_DeE",
-              },
+              headers: {"Authorization": "Bearer ${token}"},
             ),
           )
           .timeout(const Duration(seconds: 60));

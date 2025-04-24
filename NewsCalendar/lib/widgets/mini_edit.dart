@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/events.dart';
+import '../models/events.dart' as eventModel;
 
 class MiniEdit extends StatefulWidget {
-  final Event event;
+  final eventModel.Event event;
   final bool editing;
 
   const MiniEdit({Key? key, required this.event, required this.editing})
@@ -14,13 +14,13 @@ class MiniEdit extends StatefulWidget {
 }
 
 class _MiniEditState extends State<MiniEdit> {
-  late Event _editedEvent;
+  late eventModel.Event _editedEvent;
   final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
-    _editedEvent = Event.copy(widget.event);
+    _editedEvent = eventModel.Event.copy(widget.event);
   }
 
   Future<void> _selectStartDate(BuildContext context) async {
@@ -192,7 +192,8 @@ class _MiniEditState extends State<MiniEdit> {
 
     formState.save();
 
-    final updatedEvent = Event(
+    final updatedEvent = eventModel.Event(
+      lastUpdated: DateTime.now(),
       id: _editedEvent.id,
       title: _editedEvent.title,
       description: _editedEvent.description ?? '',
