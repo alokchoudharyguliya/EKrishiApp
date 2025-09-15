@@ -22,7 +22,6 @@ class _NewsCardState extends State<NewsCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine if text needs truncation
     final bool needsTruncation = widget.description.length > _maxChars;
     final String displayText =
         (!_expanded && needsTruncation)
@@ -35,31 +34,27 @@ class _NewsCardState extends State<NewsCard> {
       elevation: 3,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        width: _expanded ? MediaQuery.of(context).size.width * 0.95 : null,
         constraints: BoxConstraints(
           minHeight: 120,
-          maxWidth:
-              _expanded
-                  ? MediaQuery.of(context).size.width * 0.95
-                  : double.infinity,
+          maxWidth: MediaQuery.of(context).size.width * 0.95,
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image section
+            // Horizontal image at the top
             ClipRRect(
-              borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(16),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
               ),
               child: Image.network(
                 widget.imageUrl,
-                width: 120,
-                height: 120,
+                width: double.infinity,
+                height: 160,
                 fit: BoxFit.cover,
                 errorBuilder:
                     (context, error, stackTrace) => Container(
-                      width: 120,
-                      height: 120,
+                      width: double.infinity,
+                      height: 160,
                       color: Colors.grey[300],
                       child: const Icon(
                         Icons.image,
@@ -69,51 +64,47 @@ class _NewsCardState extends State<NewsCard> {
                     ),
               ),
             ),
-            // Text section
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      displayText,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      maxLines: _expanded ? null : 3,
-                      overflow:
-                          _expanded
-                              ? TextOverflow.visible
-                              : TextOverflow.ellipsis,
-                    ),
-                    if (needsTruncation)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(50, 30),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _expanded = !_expanded;
-                            });
-                          },
-                          child: Text(_expanded ? 'Read less' : 'Read more'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    displayText,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    maxLines: _expanded ? null : 3,
+                    overflow:
+                        _expanded
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
+                  ),
+                  if (needsTruncation)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(50, 30),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
+                        onPressed: () {
+                          setState(() {
+                            _expanded = !_expanded;
+                          });
+                        },
+                        child: Text(_expanded ? 'Read less' : 'Read more'),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ],

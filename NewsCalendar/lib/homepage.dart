@@ -119,6 +119,104 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+  void _showWeatherDetails(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.wb_sunny, color: Colors.amber, size: 28),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Today\'s Weather Details',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.8,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _weatherDetailRow(
+                    Icons.thermostat,
+                    Colors.orange,
+                    'Temperature',
+                    '32°C',
+                  ),
+                  _weatherDetailRow(
+                    Icons.water_drop,
+                    Colors.blue,
+                    'Humidity',
+                    '68%',
+                  ),
+                  _weatherDetailRow(
+                    Icons.wind_power,
+                    Colors.teal,
+                    'Wind Speed',
+                    '12 km/h',
+                  ),
+                  _weatherDetailRow(
+                    Icons.sunny,
+                    Colors.yellow[700]!,
+                    'Sunlight',
+                    '8 hrs',
+                  ),
+                  _weatherDetailRow(
+                    Icons.location_on,
+                    Colors.red,
+                    'Location',
+                    'Your GPS',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Helper widget for weather detail rows
+  Widget _weatherDetailRow(
+    IconData icon,
+    Color color,
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 15),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDateBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -512,10 +610,14 @@ class _HomepageState extends State<Homepage> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceAround,
                                 children: [
-                                  _weatherDay(
-                                    'Mon',
-                                    Icons.wb_sunny,
-                                    Colors.amber,
+                                  // Present day (Mon) is clickable
+                                  GestureDetector(
+                                    onTap: () => _showWeatherDetails(context),
+                                    child: _weatherDay(
+                                      'Mon',
+                                      Icons.wb_sunny,
+                                      Colors.amber,
+                                    ),
                                   ),
                                   _weatherDay(
                                     'Tue',
