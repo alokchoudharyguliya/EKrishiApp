@@ -4,3 +4,5 @@
 *.json
 /node_modules/
 *.dill
+SoilDataset/
+Dataset/
