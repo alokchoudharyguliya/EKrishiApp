@@ -1,0 +1,1 @@
+ C:\\Users\\alok4\\Desktop\\Sem\ Project\\CyberCalendar\\NewsCalendar\\.dart_tool\\flutter_build\\f4378ff4403ca187c33527041760376e\\native_assets.json: 

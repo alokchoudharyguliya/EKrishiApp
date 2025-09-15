@@ -1,6 +1,6 @@
 const Event = require('../models/event');
 const mongoose = require('mongoose');
-const addDays=require('date-fns').addDays;
+const addDays = require('date-fns').addDays;
 const { Types: { ObjectId } } = require('mongoose');
 require('dotenv').config();
 const User = require('../models/user');
@@ -41,7 +41,7 @@ exports.deleteEvent = async (req, res) => {
   try {
     console.log(req.body);
     const { userId } = req.body;
-    const {eventId}=req.params;
+    const { eventId } = req.params;
 
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
@@ -71,28 +71,21 @@ exports.addEvents = async (req, res) => {
       return res.status(400).json({ message: 'Invalid events data format' });
     }
 
-    // Process each event and convert ISO strings to Date objects
     const processedEvents = events.map(event => {
-      const { _id, ...eventData } = event; // Exclude _id (let MongoDB generate it)
+      const { _id, ...eventData } = event;
 
       return {
         ...eventData,
         title: event.title || 'Untitled Event',
         description: event.description || '',
-        // allDay: event.allDay || false,
-        userId: event.userId ? new ObjectId(event.userId) : null, // Convert to ObjectId if needed
-        // Convert ISO strings to Date objects for MongoDB
+        userId: event.userId ? new ObjectId(event.userId) : null,
         start_date: new Date(event.start_date),
         end_date: new Date(event.end_date),
         createdAt: event.createdAt ? new Date(event.createdAt) : new Date(),
         updatedAt: event.updatedAt ? new Date(event.updatedAt) : new Date(),
       };
     });
-
-    // Insert all events into MongoDB
     const insertedEvents = await Event.insertMany(processedEvents);
-
-
     res.status(201).json({
       message: 'Events saved successfully',
       count: insertedEvents.length,
@@ -134,19 +127,15 @@ exports.updateEvent = async (req, res) => {
 exports.addEvent = async (req, res) => {
   try {
     const { userId, title, description, start_date, end_date } = req.body;
-    
-    // Validate required fields
     if (!userId || !title || !start_date || !end_date) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "userId, title, start_date, and end_date are required." 
+        message: "userId, title, start_date, and end_date are required."
       });
     }
-
-    // Validate date formats and logic
     const startDate = new Date(start_date);
     const endDate = new Date(end_date);
-    
+
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       return res.status(400).json({
         success: false,
@@ -160,18 +149,14 @@ exports.addEvent = async (req, res) => {
         message: "End date must be after start date"
       });
     }
-
-    // Create new event with adjusted dates (if needed)
-    const newEvent = new Event({ 
+    const newEvent = new Event({
       ...req.body,
       userId,
-      start_date: addDays(startDate, 1), // Adjust dates as needed
+      start_date: addDays(startDate, 1),
       end_date: addDays(endDate, 1)
     });
 
     await newEvent.save();
-
-    // Broadcast the new event to all connected clients via WebSocket
     if (req.wss) {
       req.wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
@@ -193,8 +178,6 @@ exports.addEvent = async (req, res) => {
 
   } catch (err) {
     console.error("Error adding event:", err);
-
-    // Handle specific error types
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(val => val.message);
       return res.status(400).json({
@@ -204,14 +187,12 @@ exports.addEvent = async (req, res) => {
       });
     }
 
-    if (err.code === 11000) { // MongoDB duplicate key error
+    if (err.code === 11000) {
       return res.status(400).json({
         success: false,
         message: "Event with similar details already exists"
       });
     }
-
-    // Generic server error
     res.status(500).json({
       success: false,
       message: "Server error while adding event",

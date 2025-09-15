@@ -1,3 +1,5 @@
+import 'package:newscalendar/widgets/carousel.dart';
+
 import './utils/imports.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -222,8 +224,9 @@ class _HomepageState extends State<Homepage> {
           ),
           body: Center(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              // mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                SlidingCarousel(),
                 Text(
                   'Welcome, ${userData['name'] ?? "User"}',
                 ), // Show email or fallback

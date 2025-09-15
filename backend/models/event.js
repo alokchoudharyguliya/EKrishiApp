@@ -3,13 +3,13 @@ const mongoose = require('mongoose');
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Title is required'], // Validation: title must exist
-    trim: true, // Removes whitespace from both ends
+    required: [true, 'Title is required'],
+    trim: true,
     maxlength: [100, 'Title cannot exceed 100 characters'],
   },
   userId: {
-    type: mongoose.Schema.Types.ObjectId, // References a user document
-    ref: 'User', // Link to the 'User' model (if you have one)
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
     required: [true, 'User ID is required'],
   },
   start_date: {
@@ -39,14 +39,11 @@ const eventSchema = new mongoose.Schema({
   description: { type: String, required: false },
 
 }, {
-  timestamps: true, // Adds `createdAt` and `updatedAt` fields automatically
+  timestamps: true,
 });
 eventSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
-
-// Create the Event model
 const Event = mongoose.model('Event', eventSchema);
-
 module.exports = Event;

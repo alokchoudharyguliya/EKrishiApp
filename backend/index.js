@@ -19,8 +19,6 @@ const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-
-// Session store
 const store = new MongoDBStore({
     uri: process.env.MONGODB_URI,
     collection: 'sessions',
@@ -49,7 +47,7 @@ const fileStorage = multer.diskStorage({
 const upload = multer({
     storage: fileStorage,
     fileFilter: fileFilter,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
+    limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 const corsOptions = {
@@ -72,12 +70,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-const serviceAccount = require('./newscalendar-ac03a-firebase-adminsdk-fbsvc-ceee853a90.json');
+// const serviceAccount = require('./newscalendar-ac03a-firebase-adminsdk-fbsvc-ceee853a90.json');
 // admin.initializeApp({
 //     credential: admin.credential.cert(serviceAccount),
 //     databaseURL: process.env.FIREBASE_DATABASE_URL
 // });
-const admin = require('./config/firebase.js');
+// const admin = require('./config/firebase.js');
 // Routes
 
 app.use(userRoutes);
@@ -94,28 +92,19 @@ wss.on('connection', (ws, req) => {
     let userId;
 
     try {
-        // Extract token from query parameters
-        const token = new URL(req.url, `http://${req.headers.host}`).searchParams.get('token');
-        console.log('Token received:', token);
-
+        const token = req.headers['authorization'].replace('Bearer ', '');
         if (!token) {
             console.log('No token provided');
             ws.close(1008, 'Authentication required');
             return;
         }
-
-        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         console.log('Decoded token:', decoded);
-
-        // Get user ID from token
         userId = decoded.id || decoded._id || decoded.userId;
 
         if (!userId) {
             throw new Error('No user ID in token');
         }
-
-        // Store client connection
         clients.set(ws, { userId });
         console.log(`Authenticated user ${userId} connected`);
 

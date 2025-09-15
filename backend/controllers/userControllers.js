@@ -54,25 +54,7 @@ exports.postLogIn = async (req, res, next) => {
 };
 exports.postLogOut = async (req, res, next) => {
   try {
-    // Option 1: Simple acknowledgment (client handles token deletion)
     res.status(200).json({ message: "Logout successful" });
-
-    // Option 2: If you want server-side token invalidation
-    /*
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
-      return res.status(401).json({ message: "No token provided" });
-    }
-    
-    // Add token to blacklist (you'll need this model)
-    await TokenBlacklist.create({ 
-      token, 
-      expiresAt: new Date(Date.now() + 3600000) // 1 hour expiration
-    });
-    
-    res.status(200).json({ message: "Logout successful" });
-    */
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "An error occurred during logout" });
@@ -80,7 +62,6 @@ exports.postLogOut = async (req, res, next) => {
 };
 exports.userData = async (req, res, next) => {
   const { userId } = req.body;
-  // console.log(req.body);
   try {
 
     if (!userId) {
@@ -88,7 +69,6 @@ exports.userData = async (req, res, next) => {
     }
 
     await User.find({ _id: userId }).then(userData => {
-      // console.log(userData);
       res.status(200).json({ success: true, userData: userData });
 
     });
@@ -100,10 +80,7 @@ exports.userData = async (req, res, next) => {
 }
 exports.getProfile = async (req, res, next) => {
   try {
-    // Get user ID from authenticated request
     const userId = req.user.id;
-    
-    // Find user without password field
     const user = await User.findById(userId)
       .select('-password -__v')
       .lean();
@@ -141,10 +118,7 @@ exports.uploadProfilePhoto = async (req, res, next) => {
       });
     }
 
-    // Construct file URL
     const fileUrl = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
-
-    // Update user's photoUrl
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { photoUrl: fileUrl },
@@ -159,8 +133,6 @@ exports.uploadProfilePhoto = async (req, res, next) => {
 
   } catch (err) {
     console.error('Upload photo error:', err);
-    
-    // Clean up uploaded file if error occurred
     if (req.file) {
       const fs = require('fs');
       const path = require('path');
@@ -188,11 +160,7 @@ exports.verifyToken = async (req, res, next) => {
         message: "No token provided" 
       });
     }
-
-    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Check if user still exists
     const user = await User.findById(decoded.id)
       .select('-password -__v');
 
@@ -206,7 +174,7 @@ exports.verifyToken = async (req, res, next) => {
     res.status(200).json({ 
       success: true,
       user,
-      token // Optionally return new token if using refresh tokens
+      token
     });
 
   } catch (err) {
@@ -231,17 +199,12 @@ exports.updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const updates = req.body;
-    
-    // Remove restricted fields
     delete updates.password;
     delete updates.email;
     delete updates._id;
 
-    // Handle file upload if present
     if (req.file) {
       updates.photoUrl = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
-      
-      // Delete old photo if exists
       const oldUser = await User.findById(userId);
       if (oldUser.photoUrl) {
         const fs = require('fs');
@@ -254,7 +217,6 @@ exports.updateProfile = async (req, res, next) => {
       }
     }
 
-    // Update user
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updates,
@@ -276,7 +238,6 @@ exports.updateProfile = async (req, res, next) => {
   } catch (err) {
     console.error('Update profile error:', err);
     
-    // Clean up uploaded file if error occurred
     if (req.file) {
       const fs = require('fs');
       const path = require('path');
@@ -299,7 +260,6 @@ exports.saveUserData = async (req, res, next) => {
     const userId = req.body.id;
     const { name, dob, phone, role } = req.body;
 
-    // Validate role if provided
     if (role && !['student', 'faculty', 'other', 'admin'].includes(role)) {
       return res.status(400).json({ 
         success: false, 
@@ -307,15 +267,13 @@ exports.saveUserData = async (req, res, next) => {
       });
     }
 
-    // Prepare updates
     const updates = {
       name,
       dob,
       phone,
-      ...(role && { role }) // Only include role if provided
+      ...(role && { role }) 
     };
 
-    // Update user
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updates,

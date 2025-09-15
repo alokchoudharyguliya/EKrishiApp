@@ -17,14 +17,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   OverlayEntry? _overlayEntry;
   AnimationController? _animationController;
   Map<String, List<eventModel.Event>> _events = {};
-  List<String> _eventIds = []; // Changed to store event IDs instead of dates
-  final String apiBaseUrl = '$SOCK_BASE_URL';
+  List<String> _eventIds = [];
+  final String apiBaseUrl = SOCK_BASE_URL;
   WebSocketChannel? _channel;
   String? _currentUserId;
-  String _newEventTitle = '';
-  String _newEventDescription = '';
-  FocusNode _focusNode = FocusNode();
-  late AuthService _authService;
+  final String _newEventTitle = '';
+  final String _newEventDescription = '';
+  final FocusNode _focusNode = FocusNode();
   bool _isWebSocketInitialized = false;
 
   @override
@@ -33,9 +32,22 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _getCurrentUser();
     _setupConnectivityListener();
     _initializeHiveBoxes();
-    _authService = Provider.of<AuthService>(context, listen: false);
     _connectToWebSocket();
     _focusNode.canRequestFocus = false;
+  }
+
+  Future<void> _getCurrentUser() async {
+    final userService = Provider.of<UserService>(context, listen: false);
+    try {
+      dynamic userData = await userService.getUserData();
+      if (userData != null && userData['_id'] != null) {
+        setState(() {
+          _currentUserId = userData['_id'];
+        });
+      }
+    } catch (e) {
+      print('Error getting user data: $e');
+    }
   }
 
   void _setupConnectivityListener() {
@@ -65,11 +77,10 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   void _processPendingEvents() async {
-    if (!Provider.of<ConnectivityProvider>(context, listen: false).isOnline)
+    if (!Provider.of<ConnectivityProvider>(context, listen: false).isOnline) {
       return;
-
+    }
     final pendingEvents = _pendingOperationsBox.values.toList();
-
     for (final event in pendingEvents) {
       try {
         switch (event.changeType) {
@@ -91,39 +102,29 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
   Future<void> _syncEventToRemote(eventModel.Event event) async {
     try {
-      // First update local copy to mark as syncing
       final syncingEvent = event.copyWith(isSynced: false);
       _eventsBox.put(syncingEvent.id, syncingEvent);
       final authService = Provider.of<AuthService>(context, listen: false);
       final token = authService.token;
-      print("+++++++++++++++++");
-      print(event.toJson());
-      // Make the API call
       final response = await http.post(
         Uri.parse('$BASE_URL/'),
         headers: {
           'Content-Type': 'application/json',
-          "Authorization": "Bearer ${token}",
+          "Authorization": "Bearer $token",
         },
         body: jsonEncode(event.toJson()),
       );
       print(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // _channel?.sink.add('{"action":"refresh"}');
-        // Update local copy to mark as synced
         _channel?.stream.listen((message) {
           _processWebSocketMessage(message);
         });
-        print(response.body);
         final syncedEvent = event.copyWith(isSynced: true);
         _eventsBox.put(syncedEvent.id, syncedEvent);
-
-        // Remove from pending queue if it exists there
         if (_pendingOperationsBox.containsKey(event.id)) {
           _pendingOperationsBox.delete(event.id);
         }
       } else {
-        // If sync fails, add to pending queue
         final failedEvent = event.copyWith(
           isSynced: false,
           changeType: "CREATE",
@@ -132,44 +133,33 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         _showSyncStatusSnackbar("Sync failed. Will retry later.");
       }
     } catch (e) {
-      // On error, add to pending queue
       final failedEvent = event.copyWith(isSynced: false, changeType: "CREATE");
       _pendingOperationsBox.put(failedEvent.id, failedEvent);
       _showSyncStatusSnackbar("Network error. Will retry when online.");
     }
   }
 
-  // void _updateEvent(eventModel.Event event) {}
-
   Future<void> _syncUpdateToRemote(eventModel.Event event) async {
     try {
-      // First update local copy to mark as syncing
       final syncingEvent = event.copyWith(isSynced: false);
       _eventsBox.put(syncingEvent.id, syncingEvent);
       final authService = Provider.of<AuthService>(context, listen: false);
       final token = authService.token;
-      // Make the API call
       final response = await http.put(
         Uri.parse('$BASE_URL/${event.id}'),
         headers: {
           'Content-Type': 'application/json',
-          "Authorization": "Bearer ${token}",
+          "Authorization": "Bearer $token",
         },
         body: jsonEncode(event.toJson()),
       );
-      print("${response.body}ppppppppppppp");
-
       if (response.statusCode == 200) {
-        // Update local copy to mark as synced
         final syncedEvent = event.copyWith(isSynced: true);
         _eventsBox.put(syncedEvent.id, syncedEvent);
-
-        // Remove from pending queue if it exists there
         if (_pendingOperationsBox.containsKey(event.id)) {
           _pendingOperationsBox.delete(event.id);
         }
       } else {
-        // If sync fails, add to pending queue
         final failedEvent = event.copyWith(
           isSynced: false,
           changeType: "UPDATE",
@@ -178,17 +168,10 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         _showSyncStatusSnackbar("Update failed. Will retry later.");
       }
     } catch (e) {
-      // On error, add to pending queue
       final failedEvent = event.copyWith(isSynced: false, changeType: "UPDATE");
       _pendingOperationsBox.put(failedEvent.id, failedEvent);
       _showSyncStatusSnackbar("Network error. Will retry when online.");
     }
-  }
-
-  void _showSyncStatusSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: Duration(seconds: 2)),
-    );
   }
 
   Future<void> _syncDeleteToRemote(
@@ -198,10 +181,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       final token = authService.token;
-      // Make the API call
-      print(event.toJson());
-      print("${eventId}lllllllllllllllll");
-      print(event.userId);
       final response = await http.delete(
         Uri.parse('$BASE_URL/$eventId'),
         headers: {
@@ -210,15 +189,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         },
         body: jsonEncode({'userId': event.userId}),
       );
-      print("${response.body}ppppppppppppp");
 
       if (response.statusCode == 200 || response.statusCode == 204) {
-        // Remove from pending queue if it exists there
         if (_pendingOperationsBox.containsKey(eventId)) {
           _pendingOperationsBox.delete(eventId);
         }
       } else {
-        // If sync fails, add to pending queue
         final failedEvent = event.copyWith(
           isSynced: false,
           changeType: "DELETE",
@@ -227,11 +203,16 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         _showSyncStatusSnackbar("Deletion failed. Will retry later.");
       }
     } catch (e) {
-      // On error, add to pending queue
       final failedEvent = event.copyWith(isSynced: false, changeType: "DELETE");
       _pendingOperationsBox.put(failedEvent.id, failedEvent);
       _showSyncStatusSnackbar("Network error. Will retry when online.");
     }
+  }
+
+  void _showSyncStatusSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: Duration(seconds: 2)),
+    );
   }
 
   Future<void> _initializeHiveBoxes() async {
@@ -245,7 +226,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
     try {
       _channel = IOWebSocketChannel.connect(
-        '$SOCK_BASE_URL?token=$token',
+        SOCK_BASE_URL,
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -270,61 +251,30 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     }
   }
 
-  Future<void> _getCurrentUser() async {
-    // final authService = Provider.of<AuthService>(context, listen: false);
-    final userService = Provider.of<UserService>(context, listen: false);
-
-    try {
-      dynamic userData = await userService.getUserData();
-      if (userData != null && userData['_id'] != null) {
-        setState(() {
-          _currentUserId = userData['_id'];
-        });
-      }
-    } catch (e) {
-      // print('Error getting user data: $e');
-    }
-  }
-
   Future<void> _updateEventViaWebSocket(
     eventModel.Event updatedEvent,
     String eventId,
   ) async {
-    print(updatedEvent.toJson());
-    // Always update local database first
     final isOnline =
         Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
     final eventToUpdate = updatedEvent.copyWith(isSynced: isOnline);
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
-
-    // Always update local database first
     _eventsBox.put(eventToUpdate.id, eventToUpdate);
 
     if (isOnline) {
-      // If online, try to sync immediately
       try {
-        final message = json.encode({
-          "action": "createEvent",
-          "event": updatedEvent,
-          "token": token, // Include the token for authentication
-        });
-        print(token);
-        // _channel!.sink.add(message);
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Creating event...'),
             duration: Duration(milliseconds: 90),
           ),
         );
-        // _channel!.sink.add(message);
       } catch (e) {
         print(e);
       }
       _syncUpdateToRemote(eventToUpdate);
     } else {
-      // If offline, add to pending queue with isSynced = false
       try {
         final pendingEvent = eventToUpdate.copyWith(
           isSynced: false,
@@ -343,15 +293,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
         _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
         _showSyncStatusSnackbar("Update saved locally. Will sync when online.");
-        // final message = json.encode({
-        //   "action": "updateEvent",
-        //   "eventId": eventId,
-        //   "updates":
-        //       updatedEvent, // Changed from "event" to "updates" to match backend
-        //   "token": token,
-        // });
 
-        // _channel!.sink.add(message);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Updating event...'),
@@ -370,17 +312,11 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
-    print("---------------------------------");
-    print(DateFormat("dd-MM-yyyy").parse(eventData['end_date']).runtimeType);
-    print(eventData['start_date'].runtimeType);
-    print(eventData['userId'].runtimeType);
     final isOnline =
         Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
-    print(
-      "dddddddddddddddddddd${(DateFormat("dd-MM-yyyy").parse(eventData['start_date']))}",
-    );
+
     final newEvent = eventModel.Event.create(
       id: _uuid.v4(),
       title: eventData['title'],
@@ -390,41 +326,26 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       changeType: "CREATE",
       endDate: DateFormat("dd-MM-yyyy").parse(eventData['end_date']),
     );
-    print("-------------------------------${isOnline}");
-    // _addEvent(newEvent);
     final eventToStore = newEvent.copyWith(isSynced: isOnline);
     _eventsBox.put(eventToStore.id, eventToStore);
-    print("This is create))))))))");
     if (isOnline) {
-      // If online, try to sync immediately
       try {
-        final message = json.encode({
-          "action": "createEvent",
-          "event": eventData.toString(),
-          "token": token, // Include the token for authentication
-        });
-        print(token);
-        // _channel!.sink.add(message);
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Creating event...'),
             duration: Duration(milliseconds: 90),
           ),
         );
-        // _channel!.sink.add(message);
       } catch (e) {
         print(e);
       }
       _syncEventToRemote(eventToStore);
     } else {
-      // If offline, add to pending queue with isSynced = false
       try {
         final pendingEvent = eventToStore.copyWith(
           isSynced: false,
           changeType: "CREATE",
         );
-        print("${eventData}");
         _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
         _showSyncStatusSnackbar("Event saved locally. Will sync when online.");
       } catch (e) {
@@ -437,7 +358,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       }
     }
     if (_channel == null || token == null) {
-      print("This )");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Not connected or not authenticated'),
@@ -448,7 +368,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     }
   }
 
-  // Modify the _connectToWebSocket method to handle event creation responses
   void _connectToWebSocket() {
     try {
       _getCurrentUser();
@@ -462,20 +381,16 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
       _channel?.stream.listen(
         (message) {
-          print(message);
           _processWebSocketMessage(message);
         },
         onError: (error) {
-          print('WebSocket error: $error');
           Future.delayed(Duration(seconds: 5), _connectToWebSocket);
         },
         onDone: () {
-          print('WebSocket connection closed');
           Future.delayed(Duration(seconds: 5), _connectToWebSocket);
         },
       );
     } catch (e) {
-      print('Error connecting to WebSocket: $e');
       Future.delayed(Duration(seconds: 5), _connectToWebSocket);
     }
   }
@@ -483,20 +398,16 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   void _processWebSocketMessage(dynamic message) {
     try {
       final responseData = json.decode(message);
-      print('WebSocket message: $responseData');
 
       if (responseData["type"] == "events") {
-        print(">>>>>>>>>>");
         final newEvents = <String, List<eventModel.Event>>{};
         final newEventIds = <String>[];
 
         for (var eventData in responseData["data"]) {
           final eventId = eventData['id'].toString();
-          print("%%%%%%%%");
           if (!_events.containsKey(eventId)) {
             newEvents[eventId] = [];
             newEventIds.add(eventId);
-            print("Adding new event ID: $eventId");
           }
 
           newEvents[eventId]!.add(eventModel.Event.fromJson(eventData));
@@ -508,19 +419,16 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           _eventIds = _eventIds.toSet().toList();
         });
       } else if (responseData["type"] == "eventCreated") {
-        // Handle successful event creation
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Event created successfully'),
             duration: Duration(seconds: 2),
           ),
         );
-        // Refresh the entire state
         setState(() {
           _channel?.sink.add('{"action":"refresh"}');
         });
       } else if (responseData["type"] == "eventUpdated") {
-        // Handle successful event update
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Event updated successfully'),
@@ -528,7 +436,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           ),
         );
 
-        // Refresh the state
         setState(() {
           if (responseData["event"] != null) {
             final updatedEvent = eventModel.Event.fromJson(
@@ -540,7 +447,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           }
         });
       } else if (responseData["type"] == "eventDeleted") {
-        // Handle successful event deletion
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Event deleted successfully'),
@@ -548,7 +454,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           ),
         );
 
-        // Refresh the state
         setState(() {
           if (responseData["eventId"] != null) {
             final eventId = responseData["eventId"].toString();
@@ -582,36 +487,22 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   ) async {
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
-    print(token);
-    print(_channel);
     final isOnline =
         Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
     _eventsBox.delete(eventId);
     if (isOnline) {
       try {
-        final message = json.encode({
-          "action": "deleteEvent",
-          "eventId": event.id,
-          "event": event,
-          "token": token, // Include the token for authentication
-        });
-        print(token);
-        // _channel!.sink.add(message);
-        print(message);
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Deleting event...'),
             duration: Duration(milliseconds: 90),
           ),
         );
-        // _channel!.sink.add(message);
         _syncDeleteToRemote(eventId, event);
       } catch (e) {
         print(e);
       }
     } else {
-      // If offline, add to pending queue with isSynced = false
       try {
         final pendingEvent = event.copyWith(
           isSynced: false,
@@ -630,15 +521,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           );
           return;
         }
-
-        // final message = json.encode({
-        //   "action": "deleteEvent",
-        //   "eventId": eventId,
-        //   "token": token,
-        // });
-
-        // _channel!.sink.add(message);
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Deleting event...'),
@@ -662,6 +544,327 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _channel?.sink.close();
     _animationController?.dispose();
     _animationController = null;
+  }
+
+  Widget _buildDifferentMonthDay(
+    DateTime day,
+    CalendarColors calendarColors, {
+    bool isSelected = false,
+  }) {
+    final isWeekend = _isWeekend(day);
+
+    return Center(
+      child: Container(
+        decoration: BoxDecoration(
+          color: calendarColors.differentMonthBackground,
+        ),
+        child: Center(
+          child: Text(
+            day.day.toString(),
+            style: TextStyle(
+              fontSize: 18,
+              color:
+                  isWeekend
+                      ? (Theme.of(context).brightness == Brightness.dark
+                          ? Colors.red[300]!
+                          : Colors.red[300]!)
+                      : calendarColors.differentMonthFont,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _isWeekend(DateTime day) {
+    return day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
+  }
+
+  void _showDayOverlay(DateTime selectedDay, BuildContext context) {
+    _removeOverlay();
+
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: Navigator.of(context),
+    );
+
+    final screenSize = MediaQuery.of(context).size;
+    final dayEvents =
+        _events.values.expand((eventList) => eventList).where((event) {
+          try {
+            final eventDate = event.startDate;
+            return isSameDay(eventDate, selectedDay);
+          } catch (e) {
+            return false;
+          }
+        }).toList();
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            GestureDetector(
+              onTap: _removeOverlay,
+              child: Container(
+                color: const Color.fromARGB(28, 0, 0, 0),
+                width: screenSize.width,
+                height: screenSize.height,
+              ),
+            ),
+            Center(
+              child: ScaleTransition(
+                scale: CurvedAnimation(
+                  parent: _animationController!,
+                  curve: Curves.easeOutBack,
+                ),
+                child: FadeTransition(
+                  opacity: _animationController!,
+                  child: Material(
+                    elevation: 8.0,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: screenSize.width * 0.8,
+                      height: screenSize.height * 0.8,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Selected Day',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 20),
+                          Text(
+                            DateFormat.yMMMMd().format(selectedDay),
+                            style: TextStyle(fontSize: 18),
+                          ),
+                          // SizedBox(height: 30, child: Text("Hey")),
+                          if (dayEvents.isNotEmpty) ...[
+                            Text(
+                              'Events:',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 10),
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: dayEvents.length,
+                                itemBuilder: (context, index) {
+                                  final event = dayEvents[index];
+                                  final isUserEvent =
+                                      event.userId == _currentUserId;
+                                  return ListTile(
+                                    leading:
+                                        isUserEvent
+                                            ? Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 40, // Increased width
+                                                  child: IconButton(
+                                                    icon: Icon(
+                                                      Icons.edit,
+                                                      size:
+                                                          24, // Increased size
+                                                    ),
+                                                    color:
+                                                        Theme.of(
+                                                          context,
+                                                        ).colorScheme.primary,
+                                                    onPressed: () {
+                                                      _removeOverlay();
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder:
+                                                              (
+                                                                context,
+                                                              ) => UpdateEventScreen(
+                                                                event: event,
+                                                                updateCallback:
+                                                                    _updateEventViaWebSocket,
+                                                              ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  width: 40, // Increased width
+                                                  child: IconButton(
+                                                    icon: Icon(
+                                                      Icons.delete,
+                                                      size:
+                                                          24, // Increased size
+                                                      color: Colors.red,
+                                                    ),
+                                                    onPressed: () {
+                                                      _removeOverlay();
+                                                      showDialog(
+                                                        context: context,
+                                                        builder:
+                                                            (
+                                                              context,
+                                                            ) => AlertDialog(
+                                                              title: Text(
+                                                                'Delete Event',
+                                                              ),
+                                                              content: Text(
+                                                                'Are you sure you want to delete this event?',
+                                                              ),
+                                                              actions: [
+                                                                TextButton(
+                                                                  onPressed:
+                                                                      () => Navigator.pop(
+                                                                        context,
+                                                                      ),
+                                                                  child: Text(
+                                                                    'Cancel',
+                                                                  ),
+                                                                ),
+                                                                ElevatedButton(
+                                                                  style: ElevatedButton.styleFrom(
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .red,
+                                                                  ),
+                                                                  onPressed: () {
+                                                                    _deleteEventViaWebSocket(
+                                                                      event.id,
+                                                                      event,
+                                                                    );
+                                                                    Navigator.pop(
+                                                                      context,
+                                                                    );
+                                                                  },
+                                                                  child: Text(
+                                                                    'Delete',
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                            : SizedBox(width: 60),
+                                    title: Container(
+                                      width: double.infinity,
+                                      child: Text(
+                                        event.title ?? 'No Title',
+                                        style: TextStyle(
+                                          fontSize: 18, // Larger font size
+                                          fontWeight: FontWeight.bold, // Bold
+                                        ),
+                                      ),
+                                    ),
+                                    subtitle: Container(
+                                      width: double.infinity,
+                                      child: Text(
+                                        event.description ?? 'No Description',
+                                        style: TextStyle(
+                                          fontSize: 14, // Smaller font size
+                                          color: Colors.grey[600], // Grey color
+                                        ),
+                                      ),
+                                    ),
+                                    trailing: SizedBox(
+                                      width: 30, // Increased width
+                                      child: Icon(
+                                        Icons.event,
+                                        size: 24, // Increased size
+                                        color:
+                                            isUserEvent
+                                                ? Colors.orange
+                                                : Colors.green,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ] else
+                            Text(
+                              'No events for this day',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          SizedBox(height: 20),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 30,
+                                vertical: 15,
+                              ),
+                            ),
+                            onPressed: _removeOverlay,
+                            child: Text(
+                              'Close',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
+                          SizedBox(height: 20),
+                          FloatingActionButton(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                            onPressed: () {
+                              _removeOverlay();
+                              print(
+                                "_currentUserId_currentUserId_currentUserId",
+                              );
+                              print(_currentUserId);
+                              final newEvent = {
+                                "userId": _currentUserId,
+                                "title": _newEventTitle,
+                                "start_date": DateFormat(
+                                  "dd-MM-yyyy",
+                                ).format(selectedDay),
+                                "description": _newEventDescription,
+                                "end_date": DateFormat(
+                                  "dd-MM-yyyy",
+                                ).format(selectedDay),
+                              };
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder:
+                                      (context) => CreateEventScreen(
+                                        event: newEvent,
+                                        createCallback:
+                                            _createEventViaWebSocket,
+                                      ),
+                                ),
+                              );
+                            },
+                            child: Icon(Icons.add),
+                            tooltip: "Add Event",
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    Overlay.of(context).insert(_overlayEntry!);
+    _animationController!.forward();
   }
 
   @override
@@ -985,327 +1188,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         rowHeight: dayBoxHeight,
       ),
     );
-  }
-
-  Widget _buildDifferentMonthDay(
-    DateTime day,
-    CalendarColors calendarColors, {
-    bool isSelected = false,
-  }) {
-    final isWeekend = _isWeekend(day);
-
-    return Center(
-      child: Container(
-        decoration: BoxDecoration(
-          color: calendarColors.differentMonthBackground,
-        ),
-        child: Center(
-          child: Text(
-            day.day.toString(),
-            style: TextStyle(
-              fontSize: 18,
-              color:
-                  isWeekend
-                      ? (Theme.of(context).brightness == Brightness.dark
-                          ? Colors.red[300]!
-                          : Colors.red[300]!)
-                      : calendarColors.differentMonthFont,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  bool _isWeekend(DateTime day) {
-    return day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
-  }
-
-  void _showDayOverlay(DateTime selectedDay, BuildContext context) {
-    _removeOverlay();
-
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: Navigator.of(context),
-    );
-
-    final screenSize = MediaQuery.of(context).size;
-    final dayEvents =
-        _events.values.expand((eventList) => eventList).where((event) {
-          try {
-            final eventDate = event.startDate;
-            return isSameDay(eventDate, selectedDay);
-          } catch (e) {
-            return false;
-          }
-        }).toList();
-
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        return Stack(
-          children: [
-            GestureDetector(
-              onTap: _removeOverlay,
-              child: Container(
-                color: const Color.fromARGB(28, 0, 0, 0),
-                width: screenSize.width,
-                height: screenSize.height,
-              ),
-            ),
-            Center(
-              child: ScaleTransition(
-                scale: CurvedAnimation(
-                  parent: _animationController!,
-                  curve: Curves.easeOutBack,
-                ),
-                child: FadeTransition(
-                  opacity: _animationController!,
-                  child: Material(
-                    elevation: 8.0,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: screenSize.width * 0.8,
-                      height: screenSize.height * 0.8,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Selected Day',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 20),
-                          Text(
-                            DateFormat.yMMMMd().format(selectedDay),
-                            style: TextStyle(fontSize: 18),
-                          ),
-                          // SizedBox(height: 30, child: Text("Hey")),
-                          if (dayEvents.isNotEmpty) ...[
-                            Text(
-                              'Events:',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 10),
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: dayEvents.length,
-                                itemBuilder: (context, index) {
-                                  final event = dayEvents[index];
-                                  final isUserEvent =
-                                      event.userId == _currentUserId;
-                                  return ListTile(
-                                    leading:
-                                        isUserEvent
-                                            ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                SizedBox(
-                                                  width: 40, // Increased width
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      Icons.edit,
-                                                      size:
-                                                          24, // Increased size
-                                                    ),
-                                                    color:
-                                                        Theme.of(
-                                                          context,
-                                                        ).colorScheme.primary,
-                                                    onPressed: () {
-                                                      _removeOverlay();
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder:
-                                                              (
-                                                                context,
-                                                              ) => UpdateEventScreen(
-                                                                event: event,
-                                                                updateCallback:
-                                                                    _updateEventViaWebSocket,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                                SizedBox(
-                                                  width: 40, // Increased width
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      Icons.delete,
-                                                      size:
-                                                          24, // Increased size
-                                                      color: Colors.red,
-                                                    ),
-                                                    onPressed: () {
-                                                      _removeOverlay();
-                                                      showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (
-                                                              context,
-                                                            ) => AlertDialog(
-                                                              title: Text(
-                                                                'Delete Event',
-                                                              ),
-                                                              content: Text(
-                                                                'Are you sure you want to delete this event?',
-                                                              ),
-                                                              actions: [
-                                                                TextButton(
-                                                                  onPressed:
-                                                                      () => Navigator.pop(
-                                                                        context,
-                                                                      ),
-                                                                  child: Text(
-                                                                    'Cancel',
-                                                                  ),
-                                                                ),
-                                                                ElevatedButton(
-                                                                  style: ElevatedButton.styleFrom(
-                                                                    backgroundColor:
-                                                                        Colors
-                                                                            .red,
-                                                                  ),
-                                                                  onPressed: () {
-                                                                    _deleteEventViaWebSocket(
-                                                                      event.id,
-                                                                      event,
-                                                                    );
-                                                                    Navigator.pop(
-                                                                      context,
-                                                                    );
-                                                                  },
-                                                                  child: Text(
-                                                                    'Delete',
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                            : SizedBox(width: 60),
-                                    title: Container(
-                                      width: double.infinity,
-                                      child: Text(
-                                        event.title ?? 'No Title',
-                                        style: TextStyle(
-                                          fontSize: 18, // Larger font size
-                                          fontWeight: FontWeight.bold, // Bold
-                                        ),
-                                      ),
-                                    ),
-                                    subtitle: Container(
-                                      width: double.infinity,
-                                      child: Text(
-                                        event.description ?? 'No Description',
-                                        style: TextStyle(
-                                          fontSize: 14, // Smaller font size
-                                          color: Colors.grey[600], // Grey color
-                                        ),
-                                      ),
-                                    ),
-                                    trailing: SizedBox(
-                                      width: 30, // Increased width
-                                      child: Icon(
-                                        Icons.event,
-                                        size: 24, // Increased size
-                                        color:
-                                            isUserEvent
-                                                ? Colors.orange
-                                                : Colors.green,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ] else
-                            Text(
-                              'No events for this day',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          SizedBox(height: 20),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 30,
-                                vertical: 15,
-                              ),
-                            ),
-                            onPressed: _removeOverlay,
-                            child: Text(
-                              'Close',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                          ),
-                          SizedBox(height: 20),
-                          FloatingActionButton(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primary,
-                            onPressed: () {
-                              _removeOverlay();
-                              print(
-                                "_currentUserId_currentUserId_currentUserId",
-                              );
-                              print(_currentUserId);
-                              final newEvent = {
-                                "userId": _currentUserId,
-                                "title": _newEventTitle,
-                                "start_date": DateFormat(
-                                  "dd-MM-yyyy",
-                                ).format(selectedDay),
-                                "description": _newEventDescription,
-                                "end_date": DateFormat(
-                                  "dd-MM-yyyy",
-                                ).format(selectedDay),
-                              };
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder:
-                                      (context) => CreateEventScreen(
-                                        event: newEvent,
-                                        createCallback:
-                                            _createEventViaWebSocket,
-                                      ),
-                                ),
-                              );
-                            },
-                            child: Icon(Icons.add),
-                            tooltip: "Add Event",
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-    Overlay.of(context).insert(_overlayEntry!);
-    _animationController!.forward();
   }
 
   @override

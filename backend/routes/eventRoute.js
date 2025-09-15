@@ -8,7 +8,6 @@ const eventController=require('../controllers/eventController');
 // const { initializeApp } = require('firebase/app');
 
 router.use(authMiddleware);
-// router.delete('/delete-event',eventController.deleteEvent);
 router.get('/get-event/:eventId',eventController.getEventByEventId);
 router.get('/get-events',eventController.getEvents);
 router.post('/add-events',eventController.addEvents);
