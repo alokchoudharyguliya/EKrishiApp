@@ -2,6 +2,7 @@ import 'package:newscalendar/widgets/carousel.dart';
 import './utils/imports.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import './widgets/news.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -29,7 +30,33 @@ class _HomepageState extends State<Homepage> {
     // Home page content will be built in build()
     Container(),
     Center(child: Text('Search Page')),
-    Center(child: Text('Favorites Page')),
+    ListView(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      children: [
+        NewsCard(
+          imageUrl:
+              'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
+          title: 'New Crop Varieties Released',
+          description:
+              'Scientists have developed new drought-resistant crop varieties to help farmers.',
+        ),
+        NewsCard(
+          imageUrl:
+              'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80',
+          title: 'Weather Alert for Farmers',
+          description:
+              'Heavy rains expected this week. Take precautions to protect your crops.',
+        ),
+        NewsCard(
+          imageUrl:
+              'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=400&q=80',
+          title: 'Organic Farming Trends',
+          description:
+              'Organic farming is gaining popularity among young farmers.LOrganic farming is gaining popularity among young farmers.LOrganic farming is gaining popularity among young farmers.LOrganic farming is gaining popularity among young farmers.L',
+        ),
+        // Add more NewsCard widgets as needed
+      ],
+    ),
   ];
   int _currentIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -297,12 +324,12 @@ class _HomepageState extends State<Homepage> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.all(16.0),
+                            padding: const EdgeInsets.all(18.0),
                             child: GridView.count(
                               shrinkWrap: true,
                               crossAxisCount: 4,
-                              mainAxisSpacing: 12,
-                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 15,
+                              crossAxisSpacing: 15,
                               physics: NeverScrollableScrollPhysics(),
                               children: [
                                 OutlinedButton(
@@ -319,7 +346,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.agriculture,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.green,
                                   ),
                                 ),
@@ -337,7 +364,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.grass,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.brown,
                                   ),
                                 ),
@@ -355,7 +382,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.water_drop,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.blue,
                                   ),
                                 ),
@@ -373,7 +400,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.thermostat,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.orange,
                                   ),
                                 ),
@@ -391,7 +418,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.eco,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.teal,
                                   ),
                                 ),
@@ -409,7 +436,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.bug_report,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.red,
                                   ),
                                 ),
@@ -427,7 +454,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.spa,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.green,
                                   ),
                                 ),
@@ -445,7 +472,7 @@ class _HomepageState extends State<Homepage> {
                                   onPressed: () {},
                                   child: Icon(
                                     Icons.sunny,
-                                    size: 32,
+                                    size: 20,
                                     color: Colors.amber,
                                   ),
                                 ),
@@ -585,7 +612,7 @@ class _HomepageState extends State<Homepage> {
         children: [
           _buildNavItem(Icons.home, 0, 'Home'),
           _buildNavItem(Icons.search, 1, 'Search'),
-          _buildNavItem(Icons.favorite, 2, 'Favorites'),
+          _buildNavItem(Icons.favorite, 2, 'News'),
           _buildNavItem(Icons.person, 3, 'Profile'),
         ],
       ),
