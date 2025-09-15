@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const http = require('http');
+// const socketIo = require('socket.io');
 const path = require('path');
 const multer = require('multer');
 const bodyParser = require('body-parser');
@@ -14,6 +15,8 @@ const Event = require('./models/event.js');
 const eventRoutes = require('./routes/eventRoute.js');
 const userRoutes = require('./routes/userRoutes.js');
 const fileRoutes = require('./routes/filesRoutes.js');
+
+const webrtcRoutes = require('./routes/webrtc');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const fs = require('fs');
 
@@ -81,10 +84,55 @@ app.use(cors(corsOptions));
 app.use(userRoutes);
 app.use(fileRoutes);
 app.use(eventRoutes);
-
+app.use('/api/webrtc', webrtcRoutes);
+// const io = socketIo(server, {
+//     cors: {
+//         origin: "*",
+//         methods: ["GET", "POST"]
+//     }
+// });
 // WebSocket Server
+const wsServer = http.createServer();
 const wss = new WebSocket.Server({ server });
+wsServer.listen(3000);
+
 const clients = new Map(); // Using Map to store client info with user IDs
+const streams = new Map(); // <-- Add this line
+
+// Socket.io for WebRTC signaling
+// io.on('connection', (socket) => {
+//     console.log('User connected:', socket.id);
+//     console.log('User connected');
+//     socket.on('join-stream', (streamId) => {
+//         socket.join(streamId);
+//         console.log(`User ${socket.id} joined stream ${streamId}`);
+//     });
+
+//     socket.on('offer', (data) => {
+//         socket.to(data.streamId).emit('offer', {
+//             offer: data.offer,
+//             socketId: socket.id
+//         });
+//     });
+
+//     socket.on('answer', (data) => {
+//         socket.to(data.streamId).emit('answer', {
+//             answer: data.answer,
+//             socketId: socket.id
+//         });
+//     });
+
+//     socket.on('ice-candidate', (data) => {
+//         socket.to(data.streamId).emit('ice-candidate', {
+//             candidate: data.candidate,
+//             socketId: socket.id
+//         });
+//     });
+
+//     socket.on('disconnect', () => {
+//         console.log('User disconnected:', socket.id);
+//     });
+// });
 
 // WebSocket connection handler
 wss.on('connection', (ws, req) => {
@@ -92,7 +140,8 @@ wss.on('connection', (ws, req) => {
     let userId;
 
     try {
-        const token = req.headers['authorization'].replace('Bearer ', '');
+        // const token = req.headers['authorization'].replace('Bearer ', '');
+        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MzQ1ZGRhMTM4Yzc3NWNmMDNkMDNjOSIsImVtYWlsIjoiYWJjZEBnbWFpbC5jb20iLCJpYXQiOjE3NDgyNjIzNjJ9.dCsFsUN4xV8Nr2E8frR4cMlqiCkAQ_R-Zc2ekivjKYw";
         if (!token) {
             console.log('No token provided');
             ws.close(1008, 'Authentication required');
@@ -125,6 +174,38 @@ wss.on('connection', (ws, req) => {
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
+
+            if (data.action === 'join-stream') {
+                ws.streamId = data.streamId;
+                if (!streams.has(data.streamId)) streams.set(data.streamId, []);
+                streams.get(data.streamId).push(ws);
+                console.log(`Client joined stream ${data.streamId}`);
+            }
+            if (data.action === 'offer') {
+                // Forward offer to all viewers except sender
+                (streams.get(data.streamId) || []).forEach(client => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ action: 'offer', offer: data.offer }));
+                    }
+                });
+            }
+            if (data.action === 'answer') {
+                // Forward answer to all publishers except sender
+                (streams.get(data.streamId) || []).forEach(client => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ action: 'answer', answer: data.answer }));
+                    }
+                });
+            }
+            if (data.action === 'ice-candidate') {
+                // Forward ICE candidate to all peers in the stream except sender
+                (streams.get(data.streamId) || []).forEach(client => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ action: 'ice-candidate', candidate: data.candidate }));
+                    }
+                });
+            }
+
             console.log(`Received message from ${userId}:`, data);
 
             // Verify user is still authenticated
@@ -474,7 +555,6 @@ app.get('/', (req, res) => {
 });
 
 app.get('/ping', (req, res) => {
-    // console.log('pong');
     res.status(200).send('pong');
 });
 
@@ -491,10 +571,6 @@ mongoose.connect(process.env.MONGODB_URI).then(() => {
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on http://localhost:${PORT}`);
         console.log(`WebSocket server running on ws://localhost:${PORT}`);
-        console.log(`Accessible from My Flutter via:
-        - http://localhost:${PORT} (iOS simulator)
-        - http://10.0.2.2:${PORT} (Android emulator)
-        - Your actual local IP for physical devices`);
     });
 }).catch(err => {
     console.log(err);

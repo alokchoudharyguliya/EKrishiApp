@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebRTC Publisher</title>
+</head>
+
+<body>
+    <h2>Camera Publisher</h2>
+    <video id="localVideo" autoplay playsinline muted width="400"></video>
+    <script>
+    const streamId = prompt("Enter stream ID to publish (or use one from /api/webrtc/stream-id):");
+    const ws = new WebSocket('ws://localhost:3000');
+    let pc;
+    let stream;
+
+    // Always start camera preview, regardless of WebSocket state
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            document.getElementById('localVideo').srcObject = stream;
+        } catch (e) {
+            alert('Camera error: ' + e.message);
+            console.error('Camera error:', e);
+        }
+    }
+
+    startCamera();
+
+    ws.onopen = async () => {
+        ws.send(JSON.stringify({ action: 'join-stream', streamId }));
+
+        const configRes = await fetch('/api/webrtc/config');
+        const { config } = await configRes.json();
+
+        pc = new RTCPeerConnection(config);
+
+        // Wait for camera to be ready
+        if (!stream) {
+            let tries = 0;
+            while (!stream && tries < 10) {
+                await new Promise(res => setTimeout(res, 200));
+                tries++;
+            }
+            if (!stream) {
+                alert('Camera stream not available');
+                return;
+            }
+        }
+
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+        // Offer
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ action: 'offer', streamId, offer }));
+        console.log('Sent offer:', offer);
+
+        // ICE
+        pc.onicecandidate = e => {
+            if (e.candidate) {
+                console.log('Sent ICE candidate:', e.candidate);
+                ws.send(JSON.stringify({ action: 'ice-candidate', streamId, candidate: e.candidate }));
+            }
+        };
+    };
+
+    ws.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        if (data.action === 'answer') {
+            console.log('Received answer:', data.answer);
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        }
+        if (data.action === 'ice-candidate') {
+            console.log('Received ICE candidate:', data.candidate);
+            pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    };
+</script>
+    <!-- <script>
+        const streamId = prompt("Enter stream ID to publish (or use one from /api/webrtc/stream-id):");
+        const ws = new WebSocket('ws://localhost:3000');
+        let pc;
+        let stream;
+
+        // Always start camera preview, regardless of WebSocket state
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                document.getElementById('localVideo').srcObject = stream;
+            } catch (e) {
+                alert('Camera error: ' + e.message);
+                console.error('Camera error:', e);
+            }
+        }
+
+        startCamera();
+
+        ws.onopen = async () => {
+            ws.send(JSON.stringify({ action: 'join-stream', streamId }));
+
+            const configRes = await fetch('/api/webrtc/config');
+            const { config } = await configRes.json();
+
+            pc = new RTCPeerConnection(config);
+
+            // Wait for camera to be ready
+            if (!stream) {
+                // If stream is not ready, wait and try again
+                let tries = 0;
+                while (!stream && tries < 10) {
+                    await new Promise(res => setTimeout(res, 200));
+                    tries++;
+                }
+                if (!stream) {
+                    alert('Camera stream not available');
+                    return;
+                }
+            }
+
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            // Offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({ action: 'offer', streamId, offer }));
+            console.log('Sent offer:', offer);
+
+            // ICE
+            pc.onicecandidate = e => {
+                if (e.candidate) {
+                    console.log('Sent ICE candidate:', e.candidate);
+                    ws.send(JSON.stringify({ action: 'ice-candidate', streamId, candidate: e.candidate }));
+                }
+            };
+            // if (data.action === 'ice-candidate') {
+            //     console.log('Received ICE candidate:', data.candidate);
+            //     pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            // }
+        };
+
+        ws.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            if (data.action === 'answer') {
+                console.log('Received answer:', data.answer);
+                await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            }
+            if (data.action === 'ice-candidate') {
+                pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        };
+    </script> -->
+</body>
+
+</html>
