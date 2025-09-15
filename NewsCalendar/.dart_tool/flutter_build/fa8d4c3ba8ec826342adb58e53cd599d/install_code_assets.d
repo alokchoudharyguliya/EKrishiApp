@@ -1,0 +1,1 @@
+ C:\\Users\\alok4\\Desktop\\EKrishi\\NewsCalendar\\.dart_tool\\flutter_build\\fa8d4c3ba8ec826342adb58e53cd599d\\native_assets.json: 

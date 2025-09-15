@@ -1,5 +1,4 @@
 import 'package:newscalendar/widgets/carousel.dart';
-
 import './utils/imports.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -13,16 +12,36 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
+  Widget _weatherDay(String day, IconData icon, Color color) {
+    return Column(
+      children: [
+        Text(day, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        CircleAvatar(
+          backgroundColor: color.withOpacity(0.15),
+          child: Icon(icon, color: color, size: 24),
+        ),
+      ],
+    );
+  }
+
+  final List<Widget> _pages = [
+    // Home page content will be built in build()
+    Container(),
+    Center(child: Text('Search Page')),
+    Center(child: Text('Favorites Page')),
+  ];
+  int _currentIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? userEmail;
   final DateTime _today = DateTime.now();
   String? authToken;
   File? _cachedImageFile;
   FocusNode _focusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
-    // Initialize authToken from widget.token
     authToken = widget.token;
     Provider.of<AuthService>(context, listen: false).checkAuthStatus();
     _focusNode.canRequestFocus = false;
@@ -42,7 +61,6 @@ class _HomepageState extends State<Homepage> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final userService = Provider.of<UserService>(context, listen: false);
 
-      // Attempt server logout if we have a token
       if (authService.token != null) {
         try {
           final response = await http.post(
@@ -52,7 +70,6 @@ class _HomepageState extends State<Homepage> {
               'Content-Type': 'application/json',
             },
           );
-
           if (response.statusCode != 200) {
             print('Server logout failed, but proceeding with client cleanup');
           }
@@ -63,14 +80,12 @@ class _HomepageState extends State<Homepage> {
 
       await authService.logout();
       await userService.clearUserData();
-      // Navigate to login screen
       if (mounted) {
         _clearProfileImageCache();
         Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       print('Error during logout: $e');
-      // Ensure we still clean up and navigate even if something fails
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -87,7 +102,7 @@ class _HomepageState extends State<Homepage> {
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(20),
-          height: MediaQuery.of(context).size.height * 0.8,
+          height: MediaQuery.of(context).size.height * 0.5,
           width: MediaQuery.of(context).size.width * 0.9,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -106,7 +121,7 @@ class _HomepageState extends State<Homepage> {
                 style: const TextStyle(fontSize: 20),
               ),
               const SizedBox(height: 30),
-              ElevatedButton(
+              ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 30,
@@ -115,7 +130,11 @@ class _HomepageState extends State<Homepage> {
                   backgroundColor: Theme.of(context).primaryColor,
                 ),
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close', style: TextStyle(fontSize: 16)),
+                icon: Icon(Icons.close, color: Colors.white),
+                label: const Text(
+                  'Close',
+                  style: TextStyle(fontSize: 16, color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -129,9 +148,7 @@ class _HomepageState extends State<Homepage> {
     final userService = Provider.of<UserService>(context);
     final isOnline = context.watch<ConnectivityProvider>().isOnline;
     return FutureBuilder(
-      future:
-          userService
-              .getUserData(), // This will rebuild when notifyListeners() is called
+      future: userService.getUserData(),
       builder: (context, snapshot) {
         Map<String, dynamic> userData = {};
         if (snapshot.hasData) {
@@ -144,17 +161,26 @@ class _HomepageState extends State<Homepage> {
             backgroundColor: Theme.of(context).colorScheme.primary,
             title: const Text("Home"),
             leading: IconButton(
-              icon: Icon(Icons.menu, color: Colors.white),
+              icon: Icon(
+                Icons.menu,
+                color: Colors.white,
+                semanticLabel: 'Open menu',
+              ),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
+                icon: const Icon(
+                  Icons.logout,
+                  color: Colors.white,
+                  semanticLabel: 'Logout',
+                ),
                 onPressed: signout,
               ),
               Icon(
                 isOnline ? Icons.wifi : Icons.wifi_off,
                 color: isOnline ? Colors.green : Colors.red,
+                semanticLabel: isOnline ? 'Online' : 'Offline',
               ),
             ],
           ),
@@ -166,14 +192,39 @@ class _HomepageState extends State<Homepage> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  child: const Text(
-                    'Menu Options',
-                    style: TextStyle(color: Colors.white, fontSize: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.white,
+                        child: Icon(
+                          Icons.person,
+                          size: 40,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        userData['name'] ?? 'User',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                      Text(
+                        userData['email'] ?? '',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.home),
-                  title: Text('Home'),
+                  title: const Text('Home'),
                   onTap: () {
                     Navigator.pop(context);
                   },
@@ -222,48 +273,357 @@ class _HomepageState extends State<Homepage> {
               ],
             ),
           ),
-          body: Center(
-            child: Column(
-              // mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SlidingCarousel(),
-                Text(
-                  'Welcome, ${userData['name'] ?? "User"}',
-                ), // Show email or fallback
-                const SizedBox(height: 20),
-                Text(
-                  'Today is ${DateFormat.MMMMEEEEd().format(_today)}',
-                  style: const TextStyle(fontSize: 18),
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
+          body:
+              _currentIndex == 0
+                  ? SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 35,
-                      vertical: 15,
+                      horizontal: 16,
+                      vertical: 24,
                     ),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                  ),
-                  onPressed: () => _showDateBottomSheet(context),
-                  child: const Text(
-                    'View Detailed Date',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FloatingActionButton(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  onPressed: () => Navigator.pushNamed(context, '/calendar'),
-                  child: Icon(
-                    Icons.calendar_view_day_rounded,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SlidingCarousel(),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Welcome, ${userData['name'] ?? "User"}',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        // Agriculture icons card with button boundaries
+                        Card(
+                          elevation: 3,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: GridView.count(
+                              shrinkWrap: true,
+                              crossAxisCount: 4,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              physics: NeverScrollableScrollPhysics(),
+                              children: [
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.green,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.agriculture,
+                                    size: 32,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.brown,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.grass,
+                                    size: 32,
+                                    color: Colors.brown,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.blue,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.water_drop,
+                                    size: 32,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.orange,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.thermostat,
+                                    size: 32,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.teal,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.eco,
+                                    size: 32,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.red,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.bug_report,
+                                    size: 32,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.green,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.spa,
+                                    size: 32,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.amber,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {},
+                                  child: Icon(
+                                    Icons.sunny,
+                                    size: 32,
+                                    color: Colors.amber,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+                        // Weather forecast card
+                        // Card(
+                        // elevation: 3,
+                        // shape: RoundedRectangleBorder(
+                        //   borderRadius: BorderRadius.circular(16),
+                        // ),
+                        // child:
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16.0,
+                            horizontal: 8.0,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.cloud, color: Colors.blueGrey),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'This Week\'s Weather Forecast',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
+                                children: [
+                                  _weatherDay(
+                                    'Mon',
+                                    Icons.wb_sunny,
+                                    Colors.amber,
+                                  ),
+                                  _weatherDay(
+                                    'Tue',
+                                    Icons.cloud,
+                                    Colors.blueGrey,
+                                  ),
+                                  _weatherDay('Wed', Icons.grain, Colors.green),
+                                  _weatherDay(
+                                    'Thu',
+                                    Icons.water_drop,
+                                    Colors.blue,
+                                  ),
+                                  _weatherDay(
+                                    'Fri',
+                                    Icons.wb_cloudy,
+                                    Colors.grey,
+                                  ),
+                                  _weatherDay('Sat', Icons.bolt, Colors.orange),
+                                  _weatherDay(
+                                    'Sun',
+                                    Icons.ac_unit,
+                                    Colors.lightBlue,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // ),
+                        const SizedBox(height: 30),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 35,
+                              vertical: 15,
+                            ),
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                          onPressed: () => _showDateBottomSheet(context),
+                          icon: Icon(Icons.calendar_today, color: Colors.white),
+                          label: const Text(
+                            'View Detailed Date',
+                            style: TextStyle(fontSize: 16, color: Colors.white),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        FloatingActionButton.extended(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          onPressed:
+                              () => Navigator.pushNamed(context, '/calendar'),
+                          icon: Icon(
+                            Icons.calendar_view_day_rounded,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'Open Calendar',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                  : _pages[_currentIndex],
+          bottomNavigationBar: _buildBottomNavBar(),
         );
       },
+    );
+  }
+
+  Widget _buildBottomNavBar() {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavItem(Icons.home, 0, 'Home'),
+          _buildNavItem(Icons.search, 1, 'Search'),
+          _buildNavItem(Icons.favorite, 2, 'Favorites'),
+          _buildNavItem(Icons.person, 3, 'Profile'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(IconData icon, int index, String label) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentIndex = index;
+        });
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color:
+                isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey,
+            size: 28,
+            semanticLabel: label,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color:
+                  isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

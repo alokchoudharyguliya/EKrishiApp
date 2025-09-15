@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import './utils/imports.dart';
 import 'models/events.dart' as eventModel;
+import './screens/splash_screen.dart';
 
 ThemeData _buildTheme(AppSettings settings, bool isDarkMode) {
   return isDarkMode
@@ -315,7 +316,9 @@ class MyApp extends StatelessWidget {
         themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
         home: const Wrapper(),
         debugShowCheckedModeBanner: false,
+        initialRoute: '/splash',
         routes: {
+          '/splash': (context) => const SplashScreen(),
           '/login': (context) => const Login(),
           '/signup': (context) => SignupScreen(),
           '/home': (context) => const Homepage(),
