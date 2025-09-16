@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../utils/imports.dart';
-import '../main.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';

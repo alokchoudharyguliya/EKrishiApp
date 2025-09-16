@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:newscalendar/main.dart';
+import 'package:newscalendar/widgets/font_size_selector.dart';
+import 'package:newscalendar/widgets/news_categories_card.dart';
+import 'package:newscalendar/widgets/reset_button.dart';
+import 'package:newscalendar/widgets/section_header.dart';
+import 'package:newscalendar/widgets/theme_selector.dart';
 import '../utils/imports.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -27,6 +29,14 @@ class _SettingsPageState extends State<SettingsPage> {
     'Science': false,
     'Health': true,
   };
+  Future<void> _savePreference(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,208 +57,53 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionHeader('Appearance'),
-              _buildThemeSelector(settings),
-              _buildFontSizeSelector(),
-              _buildSectionHeader('News Preferences'),
-              _buildNewsCategories(),
-              _buildSectionHeader('General'),
+              SectionHeader(title: 'Appearance'), // custom widget
+              ThemeSelector(
+                // custom widget
+                selectedTheme: settings.theme,
+                onChanged: (newValue) {
+                  settings.setTheme(newValue);
+                  widget.onThemeChanged(newValue);
+                },
+              ),
+              FontSizeSelector(
+                // custom widget
+                selectedFontSize: _selectedFontSize,
+                onChanged: (newValue) {
+                  setState(() {
+                    _selectedFontSize = newValue;
+                    widget.onFontSizeChanged(newValue);
+                  });
+                  _savePreference('fontSize', newValue);
+                },
+              ),
+              SectionHeader(title: 'News Preferences'), // custom widget
+              NewsCategoriesCard(
+                // custom widget
+                newsCategories: newsCategories,
+                onChanged: (updated) {
+                  setState(() {
+                    newsCategories = updated;
+                  });
+                },
+              ),
+              SectionHeader(title: 'General'), // custom widget
               SizedBox(height: 30),
-              _buildResetButton(settings),
+              ResetButton(
+                // custom widget
+                newsCategories: newsCategories,
+                onCategoriesReset: () {
+                  setState(() {});
+                },
+                onReset: () {
+                  // Any additional reset logic if needed
+                },
+              ),
               SizedBox(height: 20),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 20.0, bottom: 8.0),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildThemeSelector(AppSettings settings) {
-    return Card(
-      elevation: 2,
-      color: Theme.of(context).colorScheme.surface,
-      child: ListTile(
-        title: Text(
-          'App Theme',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-        ),
-        trailing: DropdownButton<String>(
-          value: settings.theme,
-          dropdownColor: Theme.of(context).colorScheme.surface,
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              settings.setTheme(newValue);
-            }
-          },
-          items:
-              ['Light', 'Dark'].map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                );
-              }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFontSizeSelector() {
-    return Card(
-      elevation: 2,
-      color: Theme.of(context).colorScheme.surface,
-      child: ListTile(
-        title: Text(
-          'Font Size',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-        ),
-        trailing: DropdownButton<String>(
-          value: _selectedFontSize,
-          dropdownColor: Theme.of(context).colorScheme.surface,
-          onChanged: (String? newValue) {
-            setState(() {
-              _selectedFontSize = newValue!;
-              widget.onFontSizeChanged(newValue);
-            });
-            _savePreference('fontSize', newValue!);
-          },
-          items:
-              [
-                'Small',
-                'Medium',
-                'Large',
-                'Extra Large',
-              ].map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                );
-              }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNewsCategories() {
-    return Card(
-      elevation: 2,
-      color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        children:
-            newsCategories.entries.map((entry) {
-              return CheckboxListTile(
-                title: Text(
-                  entry.key,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                value: entry.value,
-                onChanged: (bool? value) {
-                  setState(() {
-                    newsCategories[entry.key] = value!;
-                  });
-                },
-                activeColor: Theme.of(context).colorScheme.secondary,
-                checkColor: Theme.of(context).colorScheme.onPrimary,
-                controlAffinity: ListTileControlAffinity.leading,
-              );
-            }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildResetButton(AppSettings settings) {
-    return Center(
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        ),
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                title: Text(
-                  'Reset Settings',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                content: Text(
-                  'Are you sure you want to reset all settings to default?',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.clear();
-                      setState(() {
-                        newsCategories.updateAll((key, value) => true);
-                      });
-                      Navigator.of(context).pop();
-                    },
-                    child: Text(
-                      'Reset',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-        child: Text('Reset to Default'),
-      ),
-    );
-  }
-
-  Future<void> _savePreference(String key, dynamic value) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (value is bool) {
-      await prefs.setBool(key, value);
-    } else if (value is String) {
-      await prefs.setString(key, value);
-    }
   }
 }
