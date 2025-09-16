@@ -460,60 +460,60 @@ class _HomepageState extends State<Homepage> {
                                     color: Colors.blue,
                                   ),
                                 ),
-                                OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    side: BorderSide(
-                                      color: Colors.orange,
-                                      width: 1.5,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  onPressed: () {},
-                                  child: Icon(
-                                    Icons.thermostat,
-                                    size: 20,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                                OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    side: BorderSide(
-                                      color: Colors.teal,
-                                      width: 1.5,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  onPressed: () {},
-                                  child: Icon(
-                                    Icons.eco,
-                                    size: 20,
-                                    color: Colors.teal,
-                                  ),
-                                ),
-                                OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    side: BorderSide(
-                                      color: Colors.red,
-                                      width: 1.5,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  onPressed: () {},
-                                  child: Icon(
-                                    Icons.bug_report,
-                                    size: 20,
-                                    color: Colors.red,
-                                  ),
-                                ),
+                                // OutlinedButton(
+                                //   style: OutlinedButton.styleFrom(
+                                //     shape: RoundedRectangleBorder(
+                                //       borderRadius: BorderRadius.circular(12),
+                                //     ),
+                                //     side: BorderSide(
+                                //       color: Colors.orange,
+                                //       width: 1.5,
+                                //     ),
+                                //     padding: EdgeInsets.zero,
+                                //   ),
+                                //   onPressed: () {},
+                                //   child: Icon(
+                                //     Icons.thermostat,
+                                //     size: 20,
+                                //     color: Colors.orange,
+                                //   ),
+                                // ),
+                                // OutlinedButton(
+                                //   style: OutlinedButton.styleFrom(
+                                //     shape: RoundedRectangleBorder(
+                                //       borderRadius: BorderRadius.circular(12),
+                                //     ),
+                                //     side: BorderSide(
+                                //       color: Colors.teal,
+                                //       width: 1.5,
+                                //     ),
+                                //     padding: EdgeInsets.zero,
+                                //   ),
+                                //   onPressed: () {},
+                                //   child: Icon(
+                                //     Icons.eco,
+                                //     size: 20,
+                                //     color: Colors.teal,
+                                //   ),
+                                // ),
+                                // OutlinedButton(
+                                //   style: OutlinedButton.styleFrom(
+                                //     shape: RoundedRectangleBorder(
+                                //       borderRadius: BorderRadius.circular(12),
+                                //     ),
+                                //     side: BorderSide(
+                                //       color: Colors.red,
+                                //       width: 1.5,
+                                //     ),
+                                //     padding: EdgeInsets.zero,
+                                //   ),
+                                //   onPressed: () {},
+                                //   child: Icon(
+                                //     Icons.bug_report,
+                                //     size: 20,
+                                //     color: Colors.red,
+                                //   ),
+                                // ),
                                 OutlinedButton(
                                   style: OutlinedButton.styleFrom(
                                     shape: RoundedRectangleBorder(
@@ -541,24 +541,24 @@ class _HomepageState extends State<Homepage> {
                                     color: Colors.green,
                                   ),
                                 ),
-                                OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    side: BorderSide(
-                                      color: Colors.amber,
-                                      width: 1.5,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  onPressed: () {},
-                                  child: Icon(
-                                    Icons.sunny,
-                                    size: 20,
-                                    color: Colors.amber,
-                                  ),
-                                ),
+                                // OutlinedButton(
+                                //   style: OutlinedButton.styleFrom(
+                                //     shape: RoundedRectangleBorder(
+                                //       borderRadius: BorderRadius.circular(12),
+                                //     ),
+                                //     side: BorderSide(
+                                //       color: Colors.amber,
+                                //       width: 1.5,
+                                //     ),
+                                //     padding: EdgeInsets.zero,
+                                //   ),
+                                //   onPressed: () {},
+                                //   child: Icon(
+                                //     Icons.sunny,
+                                //     size: 20,
+                                //     color: Colors.amber,
+                                //   ),
+                                // ),
                               ],
                             ),
                           ),

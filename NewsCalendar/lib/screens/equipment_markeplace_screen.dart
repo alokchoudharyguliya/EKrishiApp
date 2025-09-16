@@ -203,7 +203,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                       Switch(
                         value: isAvailable,
                         onChanged: (value) {
-                          isAvailable = !value;
+                          isAvailable = value & false;
                         },
                       ),
                     ],
