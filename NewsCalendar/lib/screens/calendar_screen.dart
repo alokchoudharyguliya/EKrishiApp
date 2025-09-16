@@ -2,6 +2,7 @@ import '../utils/imports.dart';
 import '../models/events.dart' as eventModel;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../widgets/different_month_day.dart';
 
 class FullScreenCalendar extends StatefulWidget {
   @override
@@ -546,36 +547,6 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _animationController = null;
   }
 
-  Widget _buildDifferentMonthDay(
-    DateTime day,
-    CalendarColors calendarColors, {
-    bool isSelected = false,
-  }) {
-    final isWeekend = _isWeekend(day);
-
-    return Center(
-      child: Container(
-        decoration: BoxDecoration(
-          color: calendarColors.differentMonthBackground,
-        ),
-        child: Center(
-          child: Text(
-            day.day.toString(),
-            style: TextStyle(
-              fontSize: 18,
-              color:
-                  isWeekend
-                      ? (Theme.of(context).brightness == Brightness.dark
-                          ? Colors.red[300]!
-                          : Colors.red[300]!)
-                      : calendarColors.differentMonthFont,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   bool _isWeekend(DateTime day) {
     return day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
   }
@@ -1004,7 +975,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           defaultBuilder: (context, day, focusedDay) {
             final isDifferentMonth = day.month != focusedDay.month;
             if (isDifferentMonth) {
-              return _buildDifferentMonthDay(day, calendarColors);
+              return DifferentMonthDay(
+                day: day,
+                backgroundColor: calendarColors.differentMonthBackground,
+                fontColor: calendarColors.differentMonthFont,
+                isWeekend: _isWeekend(day),
+                isDarkMode: Theme.of(context).brightness == Brightness.dark,
+              );
             }
 
             final isEventDay = _events.values
@@ -1066,7 +1043,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           todayBuilder: (context, day, focusedDay) {
             final isDifferentMonth = day.month != focusedDay.month;
             if (isDifferentMonth) {
-              return _buildDifferentMonthDay(day, calendarColors);
+              return DifferentMonthDay(
+                day: day,
+                backgroundColor: calendarColors.differentMonthBackground,
+                fontColor: calendarColors.differentMonthFont,
+                isWeekend: _isWeekend(day),
+                isDarkMode: Theme.of(context).brightness == Brightness.dark,
+              );
             }
 
             final isEventDay = _events.values
@@ -1127,10 +1110,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           selectedBuilder: (context, day, focusedDay) {
             final isDifferentMonth = day.month != focusedDay.month;
             if (isDifferentMonth) {
-              return _buildDifferentMonthDay(
-                day,
-                calendarColors,
-                isSelected: true,
+              return DifferentMonthDay(
+                day: day,
+                backgroundColor: calendarColors.differentMonthBackground,
+                fontColor: calendarColors.differentMonthFont,
+                isWeekend: _isWeekend(day),
+                isDarkMode: Theme.of(context).brightness == Brightness.dark,
               );
             }
 
@@ -1181,7 +1166,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             );
           },
           outsideBuilder: (context, day, focusedDay) {
-            return _buildDifferentMonthDay(day, calendarColors);
+            return DifferentMonthDay(
+              day: day,
+              backgroundColor: calendarColors.differentMonthBackground,
+              fontColor: calendarColors.differentMonthFont,
+              isWeekend: _isWeekend(day),
+              isDarkMode: Theme.of(context).brightness == Brightness.dark,
+            );
           },
         ),
         daysOfWeekHeight: 40,

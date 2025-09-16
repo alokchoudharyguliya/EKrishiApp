@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/imports.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:crypto/crypto.dart';
-
-import 'package:newscalendar/main.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
