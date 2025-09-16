@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import './utils/imports.dart';
 import 'models/events.dart' as eventModel;
 import './screens/splash_screen.dart';
+import './screens/irrigation_screen.dart';
 
 ThemeData _buildTheme(AppSettings settings, bool isDarkMode) {
   return isDarkMode
@@ -322,6 +323,7 @@ class MyApp extends StatelessWidget {
           '/login': (context) => const Login(),
           '/signup': (context) => SignupScreen(),
           '/home': (context) => const Homepage(),
+          '/irrigation': (context) => const IrrigationScreen(),
           '/calendar': (context) => FullScreenCalendar(),
           '/upload-schedule': (context) => ImageUploadScreen(),
           '/profile': (context) => const ProfileScreen(),

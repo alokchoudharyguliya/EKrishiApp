@@ -3,6 +3,8 @@ import './utils/imports.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import './widgets/news.dart';
+import './widgets/farm_cctv.dart';
+import './widgets/invoiceTile.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -20,7 +22,7 @@ class _HomepageState extends State<Homepage> {
         const SizedBox(height: 4),
         CircleAvatar(
           backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color, size: 24),
+          child: Icon(icon, color: color, size: 18),
         ),
       ],
     );
@@ -29,7 +31,7 @@ class _HomepageState extends State<Homepage> {
   final List<Widget> _pages = [
     // Home page content will be built in build()
     Container(),
-    Center(child: Text('Search Page')),
+    FarmCCTV(),
     ListView(
       padding: EdgeInsets.symmetric(vertical: 16),
       children: [
@@ -461,7 +463,7 @@ class _HomepageState extends State<Homepage> {
                                   ),
                                   onPressed: () {},
                                   child: Icon(
-                                    Icons.grass,
+                                    Icons.medical_information,
                                     size: 20,
                                     color: Colors.brown,
                                   ),
@@ -477,7 +479,9 @@ class _HomepageState extends State<Homepage> {
                                     ),
                                     padding: EdgeInsets.zero,
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () {
+                                    Navigator.pushNamed(context, '/irrigation');
+                                  },
                                   child: Icon(
                                     Icons.water_drop,
                                     size: 20,
@@ -607,18 +611,74 @@ class _HomepageState extends State<Homepage> {
                               ),
                               const SizedBox(height: 12),
                               Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment
+                                        .start, // <-- Aligns all columns to the top
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceAround,
                                 children: [
-                                  // Present day (Mon) is clickable
+                                  // Present day (Mon) is clickable and visually differentiated
                                   GestureDetector(
                                     onTap: () => _showWeatherDetails(context),
-                                    child: _weatherDay(
-                                      'Mon',
-                                      Icons.wb_sunny,
-                                      Colors.amber,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          'Mon',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.amber,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        CircleAvatar(
+                                          backgroundColor: Colors.amber
+                                              .withOpacity(0.25),
+                                          child: Icon(
+                                            Icons.wb_sunny,
+                                            color: Colors.amber,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        // The 'Today' label is positioned lower to appear as if it slides below the icon
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 2.0,
+                                          ), // Adjust this value for alignment
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.withOpacity(
+                                                0.2,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Text(
+                                              'Today',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Color.fromARGB(
+                                                  255,
+                                                  72,
+                                                  55,
+                                                  35,
+                                                ),
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
+                                  // Other days
                                   _weatherDay(
                                     'Tue',
                                     Icons.cloud,
@@ -647,6 +707,71 @@ class _HomepageState extends State<Homepage> {
                           ),
                         ),
 
+                        // Add this widget below the weather forecast section in your build method
+                        Card(
+                          elevation: 3,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          child: Padding(
+                            padding: const EdgeInsets.all(7.0),
+                            child: SizedBox(
+                              child: GridView.count(
+                                shrinkWrap: true,
+                                crossAxisCount: 2,
+                                mainAxisSpacing: 9,
+                                crossAxisSpacing: 9,
+                                physics: const NeverScrollableScrollPhysics(),
+                                childAspectRatio:
+                                    0.8, // Adjust this ratio as needed
+                                children: [
+                                  _invoiceTile(
+                                    title: 'Calendar',
+                                    features: {
+                                      'Cane Area': '16 Sep 2025',
+                                      'Effective Cane Area': '₹2,500',
+                                      'Basic Quota': 'Paid',
+                                      'Total Bonding': 'Fertilizer',
+                                      'Total Purchy': '-',
+                                    },
+                                  ),
+                                  _invoiceTile(
+                                    title: 'Supply Tickets',
+                                    features: {
+                                      'Total Issued': '14 Sep 2025',
+                                      'Total Wieghted': '₹1,200',
+                                      'Expired': 'Pending',
+                                      'Cancelled': 'Seeds',
+                                      'Valid for Supply': '2 days',
+                                    },
+                                  ),
+                                  _invoiceTile(
+                                    title: 'Invoice #1003',
+                                    features: {
+                                      'Date': '10 Sep 2025',
+                                      'Amount': '₹3,000',
+                                      'Status': 'Paid',
+                                      'Last Supply Date': 'Equipment',
+                                      'Last Supply Wt (Qtl.)': '-',
+                                    },
+                                  ),
+                                  _invoiceTile(
+                                    title: 'Invoice #1004',
+                                    features: {
+                                      'Date': '8 Sep 2025',
+                                      'Last Payment On': '8 Sep 2025',
+                                      'Amount': '₹800',
+                                      'Bank Name': 'Overdue',
+                                      'Loan Balance': 'Pesticide',
+                                      'Loan Deduction': '5 days',
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                         // ),
                         const SizedBox(height: 30),
                         ElevatedButton.icon(
@@ -690,6 +815,67 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
+  Widget _invoiceTile({
+    required String title,
+    required Map<String, String> features,
+  }) {
+    return IntrinsicHeight(
+      child: Container(
+        height: 950, // or any suitable value
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: SingleChildScrollView(
+          // child: IntrinsicHeight(
+          // height: 400,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...features.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      SizedBox(height: 20),
+                      Expanded(
+                        child: Text(
+                          e.key,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        e.value,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // ),
+      ),
+    );
+  }
+
   Widget _buildBottomNavBar() {
     return Container(
       height: 60,
@@ -713,8 +899,8 @@ class _HomepageState extends State<Homepage> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildNavItem(Icons.home, 0, 'Home'),
-          _buildNavItem(Icons.search, 1, 'Search'),
-          _buildNavItem(Icons.favorite, 2, 'News'),
+          _buildNavItem(Icons.camera, 1, 'Farm CCTV'),
+          _buildNavItem(Icons.newspaper, 2, 'News'),
           _buildNavItem(Icons.person, 3, 'Profile'),
         ],
       ),
