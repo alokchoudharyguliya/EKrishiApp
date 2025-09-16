@@ -7,7 +7,7 @@ export 'package:provider/provider.dart';
 export 'package:web_socket_channel/web_socket_channel.dart';
 export 'package:web_socket_channel/io.dart';
 export 'package:newscalendar/main.dart';
-export 'package:newscalendar/auth_service.dart';
+export 'package:newscalendar/services/auth_service.dart';
 export '../color/color.dart';
 export 'package:hive/hive.dart';
 export 'package:hive_flutter/hive_flutter.dart';

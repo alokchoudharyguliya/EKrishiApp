@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:newscalendar/main.dart';
 import 'package:provider/provider.dart';
-import 'package:newscalendar/auth_service.dart';
+import 'package:newscalendar/services/auth_service.dart';
 import '../services/user_service.dart';
 
 class EditEventScreen extends StatefulWidget {

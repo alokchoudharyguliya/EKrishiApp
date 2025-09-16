@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../auth_form_provider.dart';
-import 'package:newscalendar/auth_service.dart';
+import 'package:newscalendar/services/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:newscalendar/main.dart';
 

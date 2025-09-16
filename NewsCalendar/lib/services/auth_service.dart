@@ -1,127 +1,95 @@
-// import 'dart:convert';
-// import 'package:flutter/material.dart';
-// import 'package:http/http.dart' as http;
-// import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-// import 'package:shared_preferences/shared_preferences.dart';
-// import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// class AuthService with ChangeNotifier {
-//   final SharedPreferences sharedPreferences;
-//   final FlutterSecureStorage secureStorage;
+class AuthService with ChangeNotifier {
+  final FlutterSecureStorage _storage;
+  String? _token;
+  bool _isLoading = true;
+  bool _isAuthenticated = false;
+  DateTime? _tokenExpiry;
 
-//   String? _token;
-//   Map<String, dynamic>? _user;
-//   String? _error;
+  AuthService({FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
 
-//   AuthService({required this.sharedPreferences, required this.secureStorage});
+  String? get token => _token;
+  bool get isLoading => _isLoading;
+  bool get isAuthenticated => _isAuthenticated;
+  bool get isTokenValid =>
+      _token != null &&
+      (_tokenExpiry == null || _tokenExpiry!.isAfter(DateTime.now()));
 
-//   String? get token => _token;
-//   Map<String, dynamic>? get user => _user;
-//   String? get error => _error;
-//   bool get isAuthenticated => _token != null;
+  Future<String?> getAuthToken() async {
+    if (_token != null && isTokenValid) {
+      return _token;
+    }
 
-//   Future<void> initialize() async {
-//     _token = await secureStorage.read(key: 'token');
-//     if (_token != null) {
-//       await fetchUser();
-//     }
-//     notifyListeners();
-//   }
+    // If token is expired or not in memory, try to get from storage
+    try {
+      _token = await _storage.read(key: 'token');
+      final expiryString = await _storage.read(key: 'token_expiry');
 
-//   Future<void> register(String name, String email, String password) async {
-//     try {
-//       final response = await http.post(
-//         Uri.parse('${dotenv.env['API_URL']}/api/auth/register'),
-//         headers: {'Content-Type': 'application/json'},
-//         body: json.encode({'name': name, 'email': email, 'password': password}),
-//       );
+      if (expiryString != null) {
+        _tokenExpiry = DateTime.parse(expiryString);
+      }
 
-//       final responseData = json.decode(response.body);
+      _isAuthenticated = _token != null && isTokenValid;
+      notifyListeners();
 
-//       if (response.statusCode == 201) {
-//         _token = responseData['token'];
-//         _user = {
-//           'id': responseData['_id'],
-//           'name': responseData['name'],
-//           'email': responseData['email'],
-//         };
-//         await secureStorage.write(key: 'token', value: _token);
-//         notifyListeners();
-//       } else {
-//         _error = responseData['message'] ?? 'Registration failed';
-//         notifyListeners();
-//       }
-//     } catch (e) {
-//       _error = 'An error occurred during registration';
-//       notifyListeners();
-//     }
-//   }
+      return _isAuthenticated ? _token : null;
+    } catch (e) {
+      _token = null;
+      _tokenExpiry = null;
+      _isAuthenticated = false;
+      notifyListeners();
+      return null;
+    }
+  }
 
-//   Future<void> login(String email, String password) async {
-//     try {
-//       final response = await http.post(
-//         Uri.parse('${dotenv.env['API_URL']}/api/auth/login'),
-//         headers: {'Content-Type': 'application/json'},
-//         body: json.encode({'email': email, 'password': password}),
-//       );
+  Future<void> checkAuthStatus() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
 
-//       final responseData = json.decode(response.body);
+      await getAuthToken(); // This will update all the necessary states
 
-//       if (response.statusCode == 200) {
-//         _token = responseData['token'];
-//         _user = {
-//           'id': responseData['_id'],
-//           'name': responseData['name'],
-//           'email': responseData['email'],
-//         };
-//         await secureStorage.write(key: 'token', value: _token);
-//         notifyListeners();
-//       } else {
-//         _error = responseData['message'] ?? 'Login failed';
-//         notifyListeners();
-//       }
-//     } catch (e) {
-//       _error = 'An error occurred during login';
-//       notifyListeners();
-//     }
-//   }
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _token = null;
+      _tokenExpiry = null;
+      _isAuthenticated = false;
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
 
-//   Future<void> fetchUser() async {
-//     try {
-//       final response = await http.get(
-//         Uri.parse('${dotenv.env['API_URL']}/api/auth/profile'),
-//         headers: {
-//           'Content-Type': 'application/json',
-//           'Authorization': 'Bearer $_token',
-//         },
-//       );
+  Future<void> setAuthToken(String token, {Duration? expiresIn}) async {
+    _token = token;
+    _isAuthenticated = true;
 
-//       final responseData = json.decode(response.body);
+    if (expiresIn != null) {
+      _tokenExpiry = DateTime.now().add(expiresIn);
+      await _storage.write(
+        key: 'token_expiry',
+        value: _tokenExpiry!.toIso8601String(),
+      );
+    }
 
-//       if (response.statusCode == 200) {
-//         _user = {
-//           'id': responseData['_id'],
-//           'name': responseData['name'],
-//           'email': responseData['email'],
-//         };
-//         notifyListeners();
-//       } else {
-//         await logout();
-//       }
-//     } catch (e) {
-//       await logout();
-//     }
-//   }
+    await _storage.write(key: 'token', value: token);
+    notifyListeners();
+  }
 
-//   Future<void> logout() async {
-//     await secureStorage.delete(key: 'token');
-//     _token = null;
-//     _user = null;
-//     notifyListeners();
-//   }
+  Future<void> logout() async {
+    await Future.wait([
+      _storage.delete(key: 'token'),
+      _storage.delete(key: 'token_expiry'),
+      _storage.delete(key: 'userEmail'),
+    ]);
 
-//   void clearError() {
-//     _error = null;
-//     notifyListeners();
-//   }
-// }
+    _token = null;
+    _tokenExpiry = null;
+    _isAuthenticated = false;
+    notifyListeners();
+  }
+}

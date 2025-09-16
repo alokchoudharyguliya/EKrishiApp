@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:newscalendar/homepage.dart';
 import 'package:newscalendar/screens/login_screen.dart';
 import 'package:provider/provider.dart';
-import 'auth_service.dart';
+import 'services/auth_service.dart';
 
 class Wrapper extends StatefulWidget {
   const Wrapper({super.key});
