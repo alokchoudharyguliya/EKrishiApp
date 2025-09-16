@@ -1,4 +1,5 @@
 import 'package:newscalendar/widgets/carousel.dart';
+import './screens/doctor_contact_screen.dart';
 import './utils/imports.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -461,7 +462,14 @@ class _HomepageState extends State<Homepage> {
                                     ),
                                     padding: EdgeInsets.zero,
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => DoctorContactScreen(),
+                                      ),
+                                    );
+                                  },
                                   child: Icon(
                                     Icons.medical_information,
                                     size: 20,
