@@ -339,14 +339,6 @@ class _HomepageState extends State<Homepage> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.calendar_today),
-                  title: const Text('Calendar'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/calendar');
-                  },
-                ),
-                ListTile(
                   leading: const Icon(Icons.help),
                   title: const Text('Help & Support'),
                   onTap: () {
@@ -460,60 +452,6 @@ class _HomepageState extends State<Homepage> {
                                     color: Colors.blue,
                                   ),
                                 ),
-                                // OutlinedButton(
-                                //   style: OutlinedButton.styleFrom(
-                                //     shape: RoundedRectangleBorder(
-                                //       borderRadius: BorderRadius.circular(12),
-                                //     ),
-                                //     side: BorderSide(
-                                //       color: Colors.orange,
-                                //       width: 1.5,
-                                //     ),
-                                //     padding: EdgeInsets.zero,
-                                //   ),
-                                //   onPressed: () {},
-                                //   child: Icon(
-                                //     Icons.thermostat,
-                                //     size: 20,
-                                //     color: Colors.orange,
-                                //   ),
-                                // ),
-                                // OutlinedButton(
-                                //   style: OutlinedButton.styleFrom(
-                                //     shape: RoundedRectangleBorder(
-                                //       borderRadius: BorderRadius.circular(12),
-                                //     ),
-                                //     side: BorderSide(
-                                //       color: Colors.teal,
-                                //       width: 1.5,
-                                //     ),
-                                //     padding: EdgeInsets.zero,
-                                //   ),
-                                //   onPressed: () {},
-                                //   child: Icon(
-                                //     Icons.eco,
-                                //     size: 20,
-                                //     color: Colors.teal,
-                                //   ),
-                                // ),
-                                // OutlinedButton(
-                                //   style: OutlinedButton.styleFrom(
-                                //     shape: RoundedRectangleBorder(
-                                //       borderRadius: BorderRadius.circular(12),
-                                //     ),
-                                //     side: BorderSide(
-                                //       color: Colors.red,
-                                //       width: 1.5,
-                                //     ),
-                                //     padding: EdgeInsets.zero,
-                                //   ),
-                                //   onPressed: () {},
-                                //   child: Icon(
-                                //     Icons.bug_report,
-                                //     size: 20,
-                                //     color: Colors.red,
-                                //   ),
-                                // ),
                                 OutlinedButton(
                                   style: OutlinedButton.styleFrom(
                                     shape: RoundedRectangleBorder(
@@ -541,36 +479,11 @@ class _HomepageState extends State<Homepage> {
                                     color: Colors.green,
                                   ),
                                 ),
-                                // OutlinedButton(
-                                //   style: OutlinedButton.styleFrom(
-                                //     shape: RoundedRectangleBorder(
-                                //       borderRadius: BorderRadius.circular(12),
-                                //     ),
-                                //     side: BorderSide(
-                                //       color: Colors.amber,
-                                //       width: 1.5,
-                                //     ),
-                                //     padding: EdgeInsets.zero,
-                                //   ),
-                                //   onPressed: () {},
-                                //   child: Icon(
-                                //     Icons.sunny,
-                                //     size: 20,
-                                //     color: Colors.amber,
-                                //   ),
-                                // ),
                               ],
                             ),
                           ),
                         ),
                         const SizedBox(height: 30),
-                        // Weather forecast card
-                        // Card(
-                        // elevation: 3,
-                        // shape: RoundedRectangleBorder(
-                        //   borderRadius: BorderRadius.circular(16),
-                        // ),
-                        // child:
                         Padding(
                           padding: const EdgeInsets.symmetric(
                             vertical: 16.0,
@@ -763,22 +676,22 @@ class _HomepageState extends State<Homepage> {
                         ),
                         // ),
                         const SizedBox(height: 30),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 35,
-                              vertical: 15,
-                            ),
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primary,
-                          ),
-                          onPressed: () => _showDateBottomSheet(context),
-                          icon: Icon(Icons.calendar_today, color: Colors.white),
-                          label: const Text(
-                            'View Detailed Date',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
-                          ),
-                        ),
+                        // ElevatedButton.icon(
+                        //   style: ElevatedButton.styleFrom(
+                        //     padding: const EdgeInsets.symmetric(
+                        //       horizontal: 35,
+                        //       vertical: 15,
+                        //     ),
+                        //     backgroundColor:
+                        //         Theme.of(context).colorScheme.primary,
+                        //   ),
+                        //   onPressed: () => _showDateBottomSheet(context),
+                        //   icon: Icon(Icons.calendar_today, color: Colors.white),
+                        //   label: const Text(
+                        //     'View Detailed Date',
+                        //     style: TextStyle(fontSize: 16, color: Colors.white),
+                        //   ),
+                        // ),
                         PriceListCard(
                           mandiName: 'Lucknow Mandi',
                           date: '16 Sep 2025',
