@@ -747,7 +747,7 @@ class _HomepageState extends State<Homepage> {
                                     },
                                   ),
                                   _invoiceTile(
-                                    title: 'Invoice #1003',
+                                    title: 'Sugarcane Receipt',
                                     features: {
                                       'Date': '10 Sep 2025',
                                       'Amount': '₹3,000',
@@ -757,7 +757,7 @@ class _HomepageState extends State<Homepage> {
                                     },
                                   ),
                                   _invoiceTile(
-                                    title: 'Invoice #1004',
+                                    title: 'Payments',
                                     features: {
                                       'Date': '8 Sep 2025',
                                       'Last Payment On': '8 Sep 2025',
