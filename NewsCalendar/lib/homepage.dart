@@ -234,6 +234,23 @@ class _HomepageState extends State<Homepage> {
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
             actions: [
+              // Language switch button
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.language, color: Colors.white),
+                onSelected: (String lang) {
+                  // Implement your language change logic here
+                  // For example, using Provider or setState
+                  // setState(() => _selectedLanguage = lang);
+                  // context.read<LocaleProvider>().setLocale(Locale(lang));
+                },
+                itemBuilder:
+                    (context) => [
+                      const PopupMenuItem(value: 'en', child: Text('English')),
+                      const PopupMenuItem(value: 'hi', child: Text('हिन्दी')),
+                      const PopupMenuItem(value: 'mr', child: Text('मराठी')),
+                      // Add more languages as needed
+                    ],
+              ),
               IconButton(
                 icon: const Icon(
                   Icons.logout,
