@@ -1,65 +1,28 @@
 import 'package:newscalendar/widgets/carousel.dart';
+import 'package:newscalendar/widgets/news_page.dart';
 import './screens/doctor_contact_screen.dart';
 import './utils/imports.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import './widgets/news.dart';
+import './widgets/weather_detail_row.dart';
 import './widgets/farm_cctv.dart';
-import './widgets/invoiceTile.dart';
+import './widgets/custom_bottom_nav_bar.dart';
+import './widgets/invoice_tile.dart';
+import './widgets/weather_day.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
   const Homepage({@required this.token, Key? key}) : super(key: key);
-
   @override
   State<Homepage> createState() => _HomepageState();
 }
 
 class _HomepageState extends State<Homepage> {
-  Widget _weatherDay(String day, IconData icon, Color color) {
-    return Column(
-      children: [
-        Text(day, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color, size: 18),
-        ),
-      ],
-    );
-  }
-
   final List<Widget> _pages = [
     // Home page content will be built in build()
     Container(),
     FarmCCTV(),
-    ListView(
-      padding: EdgeInsets.symmetric(vertical: 16),
-      children: [
-        NewsCard(
-          imageUrl:
-              'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
-          title: 'New Crop Varieties Released',
-          description:
-              'Scientists have developed new drought-resistant crop varieties to help farmers.',
-        ),
-        NewsCard(
-          imageUrl:
-              'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80',
-          title: 'Weather Alert for Farmers',
-          description:
-              'Heavy rains expected this week. Take precautions to protect your crops.',
-        ),
-        NewsCard(
-          imageUrl:
-              'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=400&q=80',
-          title: 'Organic Farming Trends',
-          description:
-              'Organic farming is gaining popularity among young farmers.LOrganic farming is gaining popularity among young farmers.LOrganic farming is gaining popularity among young farmers.LOrganic farming is gaining popularity among young farmers.L',
-        ),
-        // Add more NewsCard widgets as needed
-      ],
-    ),
+    NewsPage(),
   ];
   int _currentIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -148,35 +111,35 @@ class _HomepageState extends State<Homepage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _weatherDetailRow(
-                    Icons.thermostat,
-                    Colors.orange,
-                    'Temperature',
-                    '32°C',
+                  WeatherDetailRow(
+                    icon: Icons.thermostat,
+                    color: Colors.orange,
+                    label: 'Temperature',
+                    value: '32°C',
                   ),
-                  _weatherDetailRow(
-                    Icons.water_drop,
-                    Colors.blue,
-                    'Humidity',
-                    '68%',
+                  WeatherDetailRow(
+                    icon: Icons.water_drop,
+                    color: Colors.blue,
+                    label: 'Humidity',
+                    value: '68%',
                   ),
-                  _weatherDetailRow(
-                    Icons.wind_power,
-                    Colors.teal,
-                    'Wind Speed',
-                    '12 km/h',
+                  WeatherDetailRow(
+                    icon: Icons.wind_power,
+                    color: Colors.teal,
+                    label: 'Wind Speed',
+                    value: '12 km/h',
                   ),
-                  _weatherDetailRow(
-                    Icons.sunny,
-                    Colors.yellow[700]!,
-                    'Sunlight',
-                    '8 hrs',
+                  WeatherDetailRow(
+                    icon: Icons.sunny,
+                    color: Colors.yellow[700]!,
+                    label: 'Sunlight',
+                    value: '8 hrs',
                   ),
-                  _weatherDetailRow(
-                    Icons.location_on,
-                    Colors.red,
-                    'Location',
-                    'Your GPS',
+                  WeatherDetailRow(
+                    icon: Icons.location_on,
+                    color: Colors.red,
+                    label: 'Location',
+                    value: 'Your GPS',
                   ),
                 ],
               ),
@@ -192,34 +155,6 @@ class _HomepageState extends State<Homepage> {
   }
 
   // Helper widget for weather detail rows
-  Widget _weatherDetailRow(
-    IconData icon,
-    Color color,
-    String label,
-    String value,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 15),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showDateBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -687,27 +622,35 @@ class _HomepageState extends State<Homepage> {
                                     ),
                                   ),
                                   // Other days
-                                  _weatherDay(
-                                    'Tue',
-                                    Icons.cloud,
-                                    Colors.blueGrey,
+                                  WeatherDay(
+                                    day: 'Tue',
+                                    icon: Icons.cloud,
+                                    color: Colors.blueGrey,
                                   ),
-                                  _weatherDay('Wed', Icons.grain, Colors.green),
-                                  _weatherDay(
-                                    'Thu',
-                                    Icons.water_drop,
-                                    Colors.blue,
+                                  WeatherDay(
+                                    day: 'Wed',
+                                    icon: Icons.grain,
+                                    color: Colors.green,
                                   ),
-                                  _weatherDay(
-                                    'Fri',
-                                    Icons.wb_cloudy,
-                                    Colors.grey,
+                                  WeatherDay(
+                                    day: 'Thu',
+                                    icon: Icons.water_drop,
+                                    color: Colors.blue,
                                   ),
-                                  _weatherDay('Sat', Icons.bolt, Colors.orange),
-                                  _weatherDay(
-                                    'Sun',
-                                    Icons.ac_unit,
-                                    Colors.lightBlue,
+                                  WeatherDay(
+                                    day: 'Fri',
+                                    icon: Icons.wb_cloudy,
+                                    color: Colors.grey,
+                                  ),
+                                  WeatherDay(
+                                    day: 'Sat',
+                                    icon: Icons.bolt,
+                                    color: Colors.orange,
+                                  ),
+                                  WeatherDay(
+                                    day: 'Sun',
+                                    icon: Icons.ac_unit,
+                                    color: Colors.lightBlue,
                                   ),
                                 ],
                               ),
@@ -734,7 +677,7 @@ class _HomepageState extends State<Homepage> {
                                 childAspectRatio:
                                     0.8, // Adjust this ratio as needed
                                 children: [
-                                  _invoiceTile(
+                                  InvoiceTile(
                                     title: 'Calendar',
                                     features: {
                                       'Cane Area': '16 Sep 2025',
@@ -744,7 +687,7 @@ class _HomepageState extends State<Homepage> {
                                       'Total Purchy': '-',
                                     },
                                   ),
-                                  _invoiceTile(
+                                  InvoiceTile(
                                     title: 'Supply Tickets',
                                     features: {
                                       'Total Issued': '14 Sep 2025',
@@ -754,7 +697,7 @@ class _HomepageState extends State<Homepage> {
                                       'Valid for Supply': '2 days',
                                     },
                                   ),
-                                  _invoiceTile(
+                                  InvoiceTile(
                                     title: 'Sugarcane Receipt',
                                     features: {
                                       'Date': '10 Sep 2025',
@@ -764,7 +707,7 @@ class _HomepageState extends State<Homepage> {
                                       'Last Supply Wt (Qtl.)': '-',
                                     },
                                   ),
-                                  _invoiceTile(
+                                  InvoiceTile(
                                     title: 'Payments',
                                     features: {
                                       'Date': '8 Sep 2025',
@@ -817,136 +760,16 @@ class _HomepageState extends State<Homepage> {
                     ),
                   )
                   : _pages[_currentIndex],
-          bottomNavigationBar: _buildBottomNavBar(),
+          bottomNavigationBar: CustomBottomNavBar(
+            currentIndex: _currentIndex,
+            onTabSelected: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+          ),
         );
       },
-    );
-  }
-
-  Widget _invoiceTile({
-    required String title,
-    required Map<String, String> features,
-  }) {
-    return IntrinsicHeight(
-      child: Container(
-        height: 950, // or any suitable value
-        decoration: BoxDecoration(
-          color: Colors.grey[50],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        padding: const EdgeInsets.all(12),
-        child: SingleChildScrollView(
-          // child: IntrinsicHeight(
-          // height: 400,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-              const SizedBox(height: 8),
-              ...features.entries.map(
-                (e) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: [
-                      SizedBox(height: 20),
-                      Expanded(
-                        child: Text(
-                          e.key,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        e.value,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavBar() {
-    return Container(
-      height: 60,
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-            width: 1,
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.07),
-            blurRadius: 8,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(Icons.home, 0, 'Home'),
-          _buildNavItem(Icons.camera, 1, 'Farm CCTV'),
-          _buildNavItem(Icons.newspaper, 2, 'News'),
-          _buildNavItem(Icons.person, 3, 'Profile'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, int index, String label) {
-    final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color:
-                isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey,
-            size: 28,
-            semanticLabel: label,
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color:
-                  isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -490,77 +490,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileImageWidget() {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: colorScheme.outline.withOpacity(0.3),
-          width: 2,
-        ),
-      ),
-      child: ClipOval(
-        child:
-            _selectedImageFile != null
-                ? Image.file(
-                  _selectedImageFile!,
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
-                )
-                : _cachedImageFile != null
-                ? Image.file(
-                  _cachedImageFile!,
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
-                )
-                : _userData?['photoUrl'] == null
-                ? Container(
-                  color: colorScheme.surfaceVariant,
-                  child: Icon(
-                    Icons.person,
-                    size: 60,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                )
-                : Image.network(
-                  _userData!['photoUrl'],
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value:
-                            loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                        color: colorScheme.primary,
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: colorScheme.surfaceVariant,
-                      child: Icon(
-                        Icons.person,
-                        size: 60,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    );
-                  },
-                ),
-      ),
-    );
-  }
-
+  
   Widget _buildRoleField() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -657,7 +587,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -690,98 +620,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
         ],
       ),
-      body:
-          _isLoading
-              ? Center(
-                child: CircularProgressIndicator(color: colorScheme.primary),
-              )
-              : _errorMessage != null
-              ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.error,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-              : SingleChildScrollView(
-                padding: const EdgeInsets.all(20.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Center(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            _buildProfileImageWidget(),
-                            if (_isEditing)
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 6,
-                                        offset: Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: IconButton(
-                                    icon: Icon(
-                                      Icons.camera_alt,
-                                      color: colorScheme.onPrimary,
-                                      size: 20,
-                                    ),
-                                    onPressed:
-                                        _isLoading ? null : _selectProfileImage,
-                                  ),
-                                ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    _buildProfileImageWidget(),
+                    if (_isEditing)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 6,
+                                offset: Offset(0, 3),
                               ),
-                          ],
+                            ],
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.camera_alt,
+                              color: colorScheme.onPrimary,
+                              size: 20,
+                            ),
+                            onPressed: _isLoading ? null : _selectProfileImage,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 28),
-                      _buildEditableField(
-                        label: 'Name',
-                        controller: _nameController,
-                        isEditing: _isEditing,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildEditableField(
-                        label: 'Email',
-                        controller: _emailController,
-                        isEditing: _isEditing,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildEditableField(
-                        label: 'Phone',
-                        controller: _phoneController,
-                        isEditing: _isEditing,
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildEditableField(
-                        label: 'Date of Birth',
-                        controller: _dobController,
-                        isEditing: _isEditing,
-                        isDateField: true,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildRoleField(),
-                    ],
-                  ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 28),
+              _buildEditableField(
+                label: 'Name',
+                controller: _nameController,
+                isEditing: _isEditing,
+              ),
+              const SizedBox(height: 12),
+              _buildEditableField(
+                label: 'Email',
+                controller: _emailController,
+                isEditing: _isEditing,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+              _buildEditableField(
+                label: 'Phone',
+                controller: _phoneController,
+                isEditing: _isEditing,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 12),
+              _buildEditableField(
+                label: 'Date of Birth',
+                controller: _dobController,
+                isEditing: _isEditing,
+                isDateField: true,
+              ),
+              const SizedBox(height: 12),
+              _buildRoleField(),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
