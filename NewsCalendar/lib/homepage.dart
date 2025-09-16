@@ -398,7 +398,16 @@ class _HomepageState extends State<Homepage> {
                                     ),
                                     padding: EdgeInsets.zero,
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (_) =>
+                                                const EquipmentMarket(),
+                                      ),
+                                    );
+                                  },
                                   child: Icon(
                                     Icons.agriculture,
                                     size: 20,
