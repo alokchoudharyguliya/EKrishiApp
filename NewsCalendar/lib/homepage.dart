@@ -11,6 +11,7 @@ import './widgets/custom_bottom_nav_bar.dart';
 import './widgets/invoice_tile.dart';
 import './widgets/weather_day.dart';
 import './screens/ai_crop_assistance_screen.dart';
+import './screens/equipment_markeplace_screen.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -404,7 +405,7 @@ class _HomepageState extends State<Homepage> {
                                       MaterialPageRoute(
                                         builder:
                                             (_) =>
-                                                const EquipmentMarket(),
+                                                const EquipmentMarketplaceScreen(),
                                       ),
                                     );
                                   },
