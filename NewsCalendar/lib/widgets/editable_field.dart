@@ -6,7 +6,8 @@ class EditableField extends StatelessWidget {
   final bool isEditing;
   final TextInputType? keyboardType;
   final bool isDateField;
-  final VoidCallback? onDateTap;
+  final Future<void> Function()? onDateTap;
+  // The argument type 'Future<void> Function(BuildContext)' can't be assigned to the parameter type 'VoidCallback?'.
 
   const EditableField({
     Key? key,
