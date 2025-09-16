@@ -1,5 +1,6 @@
 import 'package:newscalendar/widgets/carousel.dart';
 import 'package:newscalendar/widgets/news_page.dart';
+import 'package:newscalendar/widgets/price_list_card.dart';
 import './screens/doctor_contact_screen.dart';
 import './utils/imports.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import './widgets/farm_cctv.dart';
 import './widgets/custom_bottom_nav_bar.dart';
 import './widgets/invoice_tile.dart';
 import './widgets/weather_day.dart';
+import './screens/ai_crop_assistance_screen.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -496,7 +498,16 @@ class _HomepageState extends State<Homepage> {
                                     ),
                                     padding: EdgeInsets.zero,
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (_) =>
+                                                const AICropAssistantScreen(),
+                                      ),
+                                    );
+                                  },
                                   child: Icon(
                                     Icons.spa,
                                     size: 20,
@@ -740,6 +751,18 @@ class _HomepageState extends State<Homepage> {
                             'View Detailed Date',
                             style: TextStyle(fontSize: 16, color: Colors.white),
                           ),
+                        ),
+                        PriceListCard(
+                          mandiName: 'Lucknow Mandi',
+                          date: '16 Sep 2025',
+                          cropPrices: {
+                            'Wheat': '₹2200/qtl',
+                            'Rice': '₹1850/qtl',
+                            'Sugarcane': '₹340/qtl',
+                            'Maize': '₹1600/qtl',
+                            'Mustard': '₹5400/qtl',
+                            'Potato': '₹1200/qtl',
+                          },
                         ),
                         const SizedBox(height: 20),
                         FloatingActionButton.extended(
