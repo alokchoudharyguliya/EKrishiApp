@@ -158,6 +158,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                     controller: nameController,
                     decoration: const InputDecoration(labelText: 'Tool Name*'),
                   ),
+                  SizedBox(height: 10),
                   TextField(
                     controller: descriptionController,
                     decoration: const InputDecoration(
@@ -165,6 +166,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                     ),
                     maxLines: 2,
                   ),
+                  SizedBox(height: 10),
                   TextField(
                     controller: priceController,
                     decoration: const InputDecoration(
@@ -173,6 +175,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                     ),
                     keyboardType: TextInputType.number,
                   ),
+                  SizedBox(height: 10),
                   TextField(
                     controller: contactController,
                     decoration: const InputDecoration(
@@ -180,10 +183,12 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                     ),
                     keyboardType: TextInputType.phone,
                   ),
+                  SizedBox(height: 10),
                   TextField(
                     controller: locationController,
                     decoration: const InputDecoration(labelText: 'Location*'),
                   ),
+                  SizedBox(height: 10),
                   TextField(
                     controller: imageController,
                     decoration: const InputDecoration(
@@ -198,7 +203,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                       Switch(
                         value: isAvailable,
                         onChanged: (value) {
-                          isAvailable = value;
+                          isAvailable = !value;
                         },
                       ),
                     ],
