@@ -77,16 +77,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   _savePreference('fontSize', newValue);
                 },
               ),
-              SectionHeader(title: 'News Preferences'), // custom widget
-              NewsCategoriesCard(
-                // custom widget
-                newsCategories: newsCategories,
-                onChanged: (updated) {
-                  setState(() {
-                    newsCategories = updated;
-                  });
-                },
-              ),
+              // SectionHeader(title: 'News Preferences'), // custom widget
+              // NewsCategoriesCard(
+              //   // custom widget
+              //   newsCategories: newsCategories,
+              //   onChanged: (updated) {
+              //     setState(() {
+              //       newsCategories = updated;
+              //     });
+              //   },
+              // ),
               SectionHeader(title: 'General'), // custom widget
               SizedBox(height: 30),
               ResetButton(
