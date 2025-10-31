@@ -15,7 +15,8 @@ class FullScreenCalendar extends StatefulWidget {
 
 class _FullScreenCalendarState extends State<FullScreenCalendar> {
   DateTime _focusedDay = DateTime.now();
-  late final Box<eventModel.Event> _eventsBox;
+  // COMMENTED OUT: All Hive box usage - now using WebSocket-only event fetching
+  // late final Box<eventModel.Event> _eventsBox;
   // COMMENTED OUT: pendingEvents mechanism - now using WebSocket only
   // late final Box<eventModel.Event> _pendingOperationsBox;
   DateTime? _selectedDay;
@@ -39,7 +40,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     super.initState();
     _getCurrentUser();
     _setupConnectivityListener();
-    _initializeHiveBoxes();
+    // COMMENTED OUT: Hive box initialization - now using WebSocket-only event fetching
+    // _initializeHiveBoxes();
     _connectToWebSocket();
     _focusNode.canRequestFocus = false;
     _initializeNotifications();
@@ -333,11 +335,14 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
   */
 
+  // COMMENTED OUT: Hive box initialization - now using WebSocket-only event fetching
+  /*
   Future<void> _initializeHiveBoxes() async {
     _eventsBox = Hive.box<eventModel.Event>('events');
     // COMMENTED OUT: pendingEvents box - now using WebSocket only
     // _pendingOperationsBox = Hive.box<eventModel.Event>('pending-operations');
   }
+  */
 
   void _initializeWebSocket() {
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -394,8 +399,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         ),
       );
 
-      // Store locally first for optimistic update
-      _eventsBox.put(updatedEvent.id, updatedEvent);
+      // COMMENTED OUT: Hive box storage - now using WebSocket-only event fetching
+      // _eventsBox.put(updatedEvent.id, updatedEvent);
 
       // Send via WebSocket
       _channel!.sink.add(
@@ -492,8 +497,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         reminderSettings: eventData['reminderSettings'],
       );
 
-      // Store locally for optimistic update (will be replaced with backend ID)
-      _eventsBox.put(tempId, newEvent);
+      // COMMENTED OUT: Hive box storage - now using WebSocket-only event fetching
+      // _eventsBox.put(tempId, newEvent);
 
       // Prepare event data for WebSocket (convert dates to ISO strings)
       final eventPayload = {
@@ -596,8 +601,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
               updatedEventIds.add(eventId);
             }
 
-            // Update Hive box
-            _eventsBox.put(eventId, event);
+            // COMMENTED OUT: Hive box storage - now using WebSocket-only event fetching
+            // _eventsBox.put(eventId, event);
 
             // Schedule notifications if needed (async, but don't await here)
             if (event.reminders.isNotEmpty) {
@@ -655,8 +660,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 'yyyy-MM-dd',
               ).format(updatedEvent.startDate);
 
-              // Update local storage
-              _eventsBox.put(updatedEvent.id, updatedEvent);
+              // COMMENTED OUT: Hive box storage - now using WebSocket-only event fetching
+              // _eventsBox.put(updatedEvent.id, updatedEvent);
 
               // Update events map
               if (!_events.containsKey(dateKey)) {
@@ -691,8 +696,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           if (responseData["eventId"] != null) {
             final eventId = responseData["eventId"].toString();
 
-            // Remove from Hive
-            _eventsBox.delete(eventId);
+            // COMMENTED OUT: Hive box deletion - now using WebSocket-only event fetching
+            // _eventsBox.delete(eventId);
 
             // Remove from events map
             _events.remove(eventId);
@@ -750,8 +755,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         ),
       );
 
-      // Delete locally first for optimistic update
-      _eventsBox.delete(eventId);
+      // COMMENTED OUT: Hive box deletion - now using WebSocket-only event fetching
+      // _eventsBox.delete(eventId);
       setState(() {
         _events.remove(eventId);
         _eventIds.remove(eventId);
@@ -1075,9 +1080,58 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _animationController!.forward();
   }
 
+  // Offline UI Widget - shown when user is not connected to internet
+  Widget _buildOfflineUI() {
+    return Scaffold(
+      appBar: AppBar(title: Text('Calendar')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off, size: 80, color: Colors.grey[400]),
+            SizedBox(height: 20),
+            Text(
+              'No Internet Connection',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Please check your connection and try again',
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            SizedBox(height: 30),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Retry connection
+                setState(() {
+                  _connectToWebSocket();
+                });
+              },
+              icon: Icon(Icons.refresh),
+              label: Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOnline = context.watch<ConnectivityProvider>().isOnline;
+
+    // Show offline UI when not connected
+    if (!isOnline) {
+      return _buildOfflineUI();
+    }
+
     final screenHeight = MediaQuery.of(context).size.height;
     final dayBoxHeight = (screenHeight - 150) / 7;
     final calendarColors = Theme.of(context).extension<CalendarColors>()!;

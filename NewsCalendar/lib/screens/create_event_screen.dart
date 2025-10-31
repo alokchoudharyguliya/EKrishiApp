@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/events.dart' as eventModel;
+import 'package:provider/provider.dart';
+import '../services/network_service.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -40,7 +41,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     'Pest Control',
     'Pruning',
     'Weeding',
-    'Other'
+    'Other',
   ];
 
   @override
@@ -109,65 +110,76 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   void _showAddReminderDialog() {
     String reminderType = 'days';
-    int reminderValue = 1;
-    final TextEditingController valueController = TextEditingController(text: '1');
+    final TextEditingController valueController = TextEditingController(
+      text: '1',
+    );
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add Reminder'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: reminderType,
-                decoration: const InputDecoration(labelText: 'Reminder Type'),
-                items: const [
-                  DropdownMenuItem(value: 'days', child: Text('Days')),
-                  DropdownMenuItem(value: 'hours', child: Text('Hours')),
-                  DropdownMenuItem(value: 'minutes', child: Text('Minutes')),
-                ],
-                onChanged: (value) {
-                  setDialogState(() {
-                    reminderType = value ?? 'days';
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: valueController,
-                decoration: const InputDecoration(
-                  labelText: 'Value',
-                  hintText: 'e.g., 1 for 1 day before',
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Add Reminder'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: reminderType,
+                        decoration: const InputDecoration(
+                          labelText: 'Reminder Type',
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'days', child: Text('Days')),
+                          DropdownMenuItem(
+                            value: 'hours',
+                            child: Text('Hours'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'minutes',
+                            child: Text('Minutes'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            reminderType = value ?? 'days';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: valueController,
+                        decoration: const InputDecoration(
+                          labelText: 'Value',
+                          hintText: 'e.g., 1 for 1 day before',
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        final value = int.tryParse(valueController.value.text);
+                        if (value != null && value > 0) {
+                          setState(() {
+                            _reminders.add({
+                              'reminderType': reminderType,
+                              'reminderValue': value,
+                            });
+                          });
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text('Add'),
+                    ),
+                  ],
                 ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final value = int.tryParse(valueController.value.text);
-                if (value != null && value > 0) {
-                  setState(() {
-                    _reminders.add({
-                      'reminderType': reminderType,
-                      'reminderValue': value,
-                    });
-                  });
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -178,17 +190,33 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   void _saveChanges() {
+    // Check connectivity - WebSocket-only calendar requires online connection
+    final isOnline =
+        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
+    if (!isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No internet connection. Please connect to the internet to create events.',
+          ),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     // Parse dates from event
     DateTime startDate;
     DateTime? endDate;
-    
+
     try {
       if (widget.event['start_date'] is String) {
         startDate = DateFormat('dd-MM-yyyy').parse(widget.event['start_date']);
       } else {
         startDate = widget.event['start_date'] as DateTime;
       }
-      
+
       if (widget.event['end_date'] != null) {
         if (widget.event['end_date'] is String) {
           endDate = DateFormat('dd-MM-yyyy').parse(widget.event['end_date']);
@@ -204,7 +232,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     // Combine date and time for timed events
     DateTime? startTime;
     DateTime? endTime;
-    
+
     if (_eventMode == 'timed') {
       if (_startTime != null) {
         startTime = DateTime(
@@ -225,15 +253,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           _endTime!.minute,
         );
       }
-      
+
       // Validation
       if (startTime == null || endTime == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select both start and end times for timed events')),
+          const SnackBar(
+            content: Text(
+              'Please select both start and end times for timed events',
+            ),
+          ),
         );
         return;
       }
-      
+
       if (endTime.isBefore(startTime) || endTime.isAtSameMomentAs(startTime)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('End time must be after start time')),
@@ -247,22 +279,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (_reminders.isNotEmpty) {
       // Calculate reminder times based on event start
       final eventStartTime = startTime ?? startDate;
-      
+
       for (var reminder in _reminders) {
         DateTime reminderTime = eventStartTime;
-        
+
         switch (reminder['reminderType']) {
           case 'days':
-            reminderTime = reminderTime.subtract(Duration(days: reminder['reminderValue']));
+            reminderTime = reminderTime.subtract(
+              Duration(days: reminder['reminderValue']),
+            );
             break;
           case 'hours':
-            reminderTime = reminderTime.subtract(Duration(hours: reminder['reminderValue']));
+            reminderTime = reminderTime.subtract(
+              Duration(hours: reminder['reminderValue']),
+            );
             break;
           case 'minutes':
-            reminderTime = reminderTime.subtract(Duration(minutes: reminder['reminderValue']));
+            reminderTime = reminderTime.subtract(
+              Duration(minutes: reminder['reminderValue']),
+            );
             break;
         }
-        
+
         remindersJson.add({
           'reminderTime': reminderTime.toIso8601String(),
           'reminderType': reminder['reminderType'],
@@ -273,22 +311,36 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     final updates = {
-      "title": _titleController.text.isNotEmpty
-          ? _titleController.text
-          : widget.event['title'],
-      "description": _descriptionController.text.isNotEmpty
-          ? _descriptionController.text
-          : widget.event['description'],
+      "title":
+          _titleController.text.isNotEmpty
+              ? _titleController.text
+              : widget.event['title'],
+      "description":
+          _descriptionController.text.isNotEmpty
+              ? _descriptionController.text
+              : widget.event['description'],
       "userId": widget.event['userId'],
       "start_date": DateFormat('dd-MM-yyyy').format(startDate),
-      "end_date": endDate != null ? DateFormat('dd-MM-yyyy').format(endDate) : DateFormat('dd-MM-yyyy').format(startDate),
+      "end_date":
+          endDate != null
+              ? DateFormat('dd-MM-yyyy').format(endDate)
+              : DateFormat('dd-MM-yyyy').format(startDate),
       "eventMode": _eventMode,
       "startTime": startTime?.toIso8601String(),
       "endTime": endTime?.toIso8601String(),
-      "cropType": _cropTypeController.text.trim().isNotEmpty ? _cropTypeController.text.trim() : null,
-      "cropVariety": _cropVarietyController.text.trim().isNotEmpty ? _cropVarietyController.text.trim() : null,
+      "cropType":
+          _cropTypeController.text.trim().isNotEmpty
+              ? _cropTypeController.text.trim()
+              : null,
+      "cropVariety":
+          _cropVarietyController.text.trim().isNotEmpty
+              ? _cropVarietyController.text.trim()
+              : null,
       "activityType": _activityType,
-      "fieldLocation": _fieldLocationController.text.trim().isNotEmpty ? _fieldLocationController.text.trim() : null,
+      "fieldLocation":
+          _fieldLocationController.text.trim().isNotEmpty
+              ? _fieldLocationController.text.trim()
+              : null,
       "equipmentNeeded": _equipmentList,
       "reminders": remindersJson,
     };
@@ -299,11 +351,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   Widget _buildReminderChip(int index) {
     final reminder = _reminders[index];
-    String label = '${reminder['reminderValue']} ${reminder['reminderType']} before';
+    String label =
+        '${reminder['reminderValue']} ${reminder['reminderType']} before';
     if (reminder['reminderValue'] == 1) {
       label = label.replaceAll('s before', ' before');
     }
-    
+
     return Chip(
       label: Text(label),
       onDeleted: () => _removeReminder(index),
@@ -313,11 +366,25 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOnline = context.watch<ConnectivityProvider>().isOnline;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Event'),
         actions: [
-          IconButton(icon: const Icon(Icons.save), onPressed: _saveChanges),
+          // Connectivity indicator
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Icon(
+              isOnline ? Icons.wifi : Icons.wifi_off,
+              color: isOnline ? Colors.green : Colors.red,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _saveChanges,
+            tooltip: isOnline ? 'Save Event' : 'No Internet Connection',
+          ),
         ],
       ),
       body: FocusScope(
@@ -338,7 +405,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 onEditingComplete: () => _focusNode.nextFocus(),
               ),
               const SizedBox(height: 20),
-              
+
               // Description
               ConstrainedBox(
                 constraints: BoxConstraints(
@@ -358,7 +425,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Event Mode
               Card(
                 child: Padding(
@@ -368,7 +435,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     children: [
                       const Text(
                         'Event Mode',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -403,7 +473,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           ),
                         ],
                       ),
-                      
+
                       // Time pickers (only for timed events)
                       if (_eventMode == 'timed') ...[
                         const SizedBox(height: 12),
@@ -452,7 +522,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Farmer-Specific Fields
               Card(
                 child: Padding(
@@ -462,10 +532,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     children: [
                       const Text(
                         'Farming Details',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Activity Type
                       DropdownButtonFormField<String>(
                         value: _activityType,
@@ -473,12 +546,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           labelText: 'Activity Type',
                           border: OutlineInputBorder(),
                         ),
-                        items: _activityTypes.map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Text(type),
-                          );
-                        }).toList(),
+                        items:
+                            _activityTypes.map((type) {
+                              return DropdownMenuItem(
+                                value: type,
+                                child: Text(type),
+                              );
+                            }).toList(),
                         onChanged: (value) {
                           setState(() {
                             _activityType = value;
@@ -486,7 +560,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Crop Type
                       TextField(
                         controller: _cropTypeController,
@@ -497,7 +571,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Crop Variety
                       TextField(
                         controller: _cropVarietyController,
@@ -508,7 +582,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Field Location
                       TextField(
                         controller: _fieldLocationController,
@@ -519,7 +593,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Equipment Needed
                       TextField(
                         controller: _equipmentController,
@@ -554,7 +628,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Reminders Section
               Card(
                 child: Padding(
@@ -567,7 +641,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         children: [
                           const Text(
                             'Reminders',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           TextButton.icon(
                             onPressed: _showAddReminderDialog,

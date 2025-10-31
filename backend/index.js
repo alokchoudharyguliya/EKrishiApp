@@ -322,7 +322,7 @@ wss.on('connection', (ws, req) => {
 async function handleCreateEvent(eventData, ws, userId) {
     try {
         console.log('Creating event with data:', eventData);
-        
+
         function parseDate(input) {
             // If already a Date object, return it
             if (input instanceof Date) return input;
