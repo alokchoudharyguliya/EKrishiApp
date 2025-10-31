@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package crop_analysis;
+
+service CropAnalysisService {
+  // Main method for crop analysis with image and context
+  rpc AnalyzeCrop(CropAnalysisRequest) returns (CropAnalysisResponse);
+  
+  // Health check endpoint
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+message CropAnalysisRequest {
+  bytes image_data = 1;          // Raw image bytes
+  string image_name = 2;         // Original filename
+  string image_type = 3;         // Type: Leaf, Stem, Soil, Whole Plant
+  string crop_type = 4;          // Crop name: Wheat, Rice, etc.
+  string observed_problem = 5;   // User's description of problem
+  int32 plant_age_days = 6;      // Age in days
+  bool recent_weather_event = 7; // Weather event flag
+  string user_id = 8;            // Optional: for tracking
+}
+
+message CropAnalysisResponse {
+  bool success = 1;
+  string diagnosis = 2;          // Main diagnosis text
+  double confidence = 3;         // Confidence score 0.0-1.0
+  string disease = 4;            // Disease name if applicable
+  string severity = 5;           // low, moderate, high
+  repeated string suggestions = 6;  // Treatment suggestions
+  repeated Treatment treatment = 7;  // Treatment details
+  repeated string prevention = 8;    // Prevention tips
+  repeated string references = 9;    // Reference URLs
+  double processing_time = 10;   // Time taken in seconds
+  string model_used = 11;        // Model identifier
+  string error_message = 12;     // Error if success is false
+}
+
+message Treatment {
+  string product = 1;            // Product name
+  string application = 2;        // How to apply
+  string duration = 3;           // Treatment duration
+}
+
+message HealthRequest {
+  // Empty message for health check
+}
+
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  string version = 3;
+}
+
+

@@ -15,6 +15,9 @@ const Event = require('./models/event.js');
 const eventRoutes = require('./routes/eventRoute.js');
 const userRoutes = require('./routes/userRoutes.js');
 const fileRoutes = require('./routes/filesRoutes.js');
+const aiRoutes = require('./routes/aiRoutes.js');
+const irrigationRoutes = require('./routes/irrigationRoutes.js');
+const equipmentRoutes = require('./routes/equipmentRoutes.js');
 
 const webrtcRoutes = require('./routes/webrtc');
 const MongoDBStore = require('connect-mongodb-session')(session);
@@ -81,10 +84,15 @@ app.use(cors(corsOptions));
 // const admin = require('./config/firebase.js');
 // Routes
 
+app.use('/api/equipment', equipmentRoutes);
 app.use(userRoutes);
 app.use(fileRoutes);
 app.use(eventRoutes);
 app.use('/api/webrtc', webrtcRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/irrigation', irrigationRoutes);
+// Static serving for equipment images
+app.use('/equipment', express.static(path.join(__dirname, 'uploads', 'equipment')));
 // const io = socketIo(server, {
 //     cors: {
 //         origin: "*",
@@ -92,9 +100,9 @@ app.use('/api/webrtc', webrtcRoutes);
 //     }
 // });
 // WebSocket Server
-const wsServer = http.createServer();
+// const wsServer = http.createServer();
 const wss = new WebSocket.Server({ server });
-wsServer.listen(3000);
+// wsServer.listen(3002);
 
 const clients = new Map(); // Using Map to store client info with user IDs
 const streams = new Map(); // <-- Add this line
@@ -140,8 +148,8 @@ wss.on('connection', (ws, req) => {
     let userId;
 
     try {
-        // const token = req.headers['authorization'].replace('Bearer ', '');
-        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MzQ1ZGRhMTM4Yzc3NWNmMDNkMDNjOSIsImVtYWlsIjoiYWJjZEBnbWFpbC5jb20iLCJpYXQiOjE3NDgyNjIzNjJ9.dCsFsUN4xV8Nr2E8frR4cMlqiCkAQ_R-Zc2ekivjKYw";
+        const token = req.headers['authorization'].replace('Bearer ', '');
+        // const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MzQ1ZGRhMTM4Yzc3NWNmMDNkMDNjOSIsImVtYWlsIjoiYWJjZEBnbWFpbC5jb20iLCJpYXQiOjE3NDgyNjIzNjJ9.dCsFsUN4xV8Nr2E8frR4cMlqiCkAQ_R-Zc2ekivjKYw";
         if (!token) {
             console.log('No token provided');
             ws.close(1008, 'Authentication required');

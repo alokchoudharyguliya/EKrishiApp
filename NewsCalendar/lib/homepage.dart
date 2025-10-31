@@ -12,6 +12,8 @@ import './widgets/invoice_tile.dart';
 import './widgets/weather_day.dart';
 import './screens/ai_crop_assistance_screen.dart';
 import './screens/equipment_markeplace_screen.dart';
+import './screens/login_screen.dart';
+import './screens/chatbot_screen.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -26,6 +28,7 @@ class _HomepageState extends State<Homepage> {
     Container(),
     FarmCCTV(),
     NewsPage(),
+    ChatbotScreen(),
   ];
   int _currentIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -78,13 +81,17 @@ class _HomepageState extends State<Homepage> {
       await userService.clearUserData();
       if (mounted) {
         _clearProfileImageCache();
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const Login()),
+          (route) => false, // This removes all previous routes
+        );
       }
     } catch (e) {
       print('Error during logout: $e');
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+      // if (mounted) {
+      //   Navigator.pushReplacementNamed(context, '/login');
+      // }
     }
   }
 

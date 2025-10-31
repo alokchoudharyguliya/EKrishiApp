@@ -129,11 +129,6 @@ class DoctorContactScreen extends StatelessWidget {
                         tooltip: 'Message',
                         onPressed: () => _launchSMS(doc['phone'] ?? ''),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.call, color: Colors.teal),
-                        tooltip: 'WhatsApp',
-                        onPressed: () => _launchWhatsApp(doc['whatsapp'] ?? ''),
-                      ),
                     ],
                   ),
                 ],
