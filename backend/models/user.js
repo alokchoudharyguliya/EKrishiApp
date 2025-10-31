@@ -20,14 +20,14 @@ const userSchema = new Schema({
     type: String
   },
   dob: {
-    type: String
+    type: Date
   },
   phone: {
     type: String
   },
   role: {
     type: String,
-    enum: ['student', 'faculty', 'other', 'admin'],
+    enum: ['student', 'faculty', 'other', 'admin', 'farmer'],
     default: 'student'
   },
 

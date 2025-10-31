@@ -6,6 +6,52 @@ part of 'events.dart';
 // TypeAdapterGenerator
 // **************************************************************************
 
+class ReminderAdapter extends TypeAdapter<Reminder> {
+  @override
+  final int typeId = 1;
+
+  @override
+  Reminder read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return Reminder(
+      reminderTime: fields[0] as DateTime,
+      reminderType: fields[1] as String,
+      reminderValue: fields[2] as int,
+      isNotified: fields[3] as bool,
+      notificationId: fields[4] as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, Reminder obj) {
+    writer
+      ..writeByte(5)
+      ..writeByte(0)
+      ..write(obj.reminderTime)
+      ..writeByte(1)
+      ..write(obj.reminderType)
+      ..writeByte(2)
+      ..write(obj.reminderValue)
+      ..writeByte(3)
+      ..write(obj.isNotified)
+      ..writeByte(4)
+      ..write(obj.notificationId);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReminderAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
 class EventAdapter extends TypeAdapter<Event> {
   @override
   final int typeId = 0;
@@ -30,13 +76,23 @@ class EventAdapter extends TypeAdapter<Event> {
       lastUpdated: fields[9] as DateTime,
       version: fields[10] as int,
       changeType: fields[12] as String?,
+      eventMode: fields[13] as String,
+      startTime: fields[14] as DateTime?,
+      endTime: fields[15] as DateTime?,
+      cropType: fields[16] as String?,
+      cropVariety: fields[17] as String?,
+      activityType: fields[18] as String?,
+      fieldLocation: fields[19] as String?,
+      equipmentNeeded: (fields[20] as List).cast<String>(),
+      reminders: (fields[21] as List).cast<Reminder>(),
+      reminderSettings: (fields[22] as Map?)?.cast<String, dynamic>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Event obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(23)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +118,27 @@ class EventAdapter extends TypeAdapter<Event> {
       ..writeByte(11)
       ..write(obj.isDeleted)
       ..writeByte(12)
-      ..write(obj.changeType);
+      ..write(obj.changeType)
+      ..writeByte(13)
+      ..write(obj.eventMode)
+      ..writeByte(14)
+      ..write(obj.startTime)
+      ..writeByte(15)
+      ..write(obj.endTime)
+      ..writeByte(16)
+      ..write(obj.cropType)
+      ..writeByte(17)
+      ..write(obj.cropVariety)
+      ..writeByte(18)
+      ..write(obj.activityType)
+      ..writeByte(19)
+      ..write(obj.fieldLocation)
+      ..writeByte(20)
+      ..write(obj.equipmentNeeded)
+      ..writeByte(21)
+      ..write(obj.reminders)
+      ..writeByte(22)
+      ..write(obj.reminderSettings);
   }
 
   @override

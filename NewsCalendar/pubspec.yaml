@@ -71,6 +71,9 @@ dependencies:
   permission_handler: ^11.3.1  # For runtime permissions
   flutter_blue_plus: ^1.32.11  # For Bluetooth functionality
   wifi_iot: ^0.3.18  # For WiFi functionality
+  flutter_markdown: ^0.7.7+1
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -100,6 +103,7 @@ flutter:
     - assets/bamboo-research-452705-u8-6ebb1bbd471a.json
     - .env
     - assets/images/
+    - assets/config/cameras.json
 
 
 

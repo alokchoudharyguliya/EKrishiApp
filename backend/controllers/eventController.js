@@ -5,6 +5,7 @@ const { Types: { ObjectId } } = require('mongoose');
 require('dotenv').config();
 const User = require('../models/user');
 const formatDate = require('../utils/helpers');
+const notificationService = require('../services/notificationService');
 exports.getEvents = async (req, res) => {
   try {
     const userId = req.body.userId;
@@ -13,7 +14,7 @@ exports.getEvents = async (req, res) => {
       return res.status(400).json({ message: "User ID is required." });
     }
 
-    const events = await event.find({ userId }).sort({ start_date: 1 });
+    const events = await Event.find({ userId }).sort({ start_date: 1 });
 
     res.status(200).json({ success: true, events });
   } catch (err) {
@@ -105,14 +106,20 @@ exports.addEvents = async (req, res) => {
 exports.updateEvent = async (req, res) => {
   try {
     const { userId } = req.body;
-    const updates = req.body;
+    let updates = { ...req.body };
     const eventId = req.params.id;
     if (!eventId) {
       return res.status(400).json({ message: "Event ID is required." });
     }
+    
+    // Process reminders if being updated
+    if (updates.reminders && Array.isArray(updates.reminders) && updates.reminders.length > 0) {
+      updates = await notificationService.updateEventReminders(eventId, updates);
+    }
+    
     const updatedEvent = await Event.findOneAndUpdate(
       { _id: eventId, userId: userId },
-      updates,
+      { $set: updates },
       { new: true, runValidators: true }
     );
     if (!updatedEvent) {
@@ -120,7 +127,12 @@ exports.updateEvent = async (req, res) => {
     }
     res.status(200).json({ success: true, message: "Event updated successfully.", event: updatedEvent });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error." });
+    console.error("Error updating event:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error.",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 
 };
@@ -149,12 +161,28 @@ exports.addEvent = async (req, res) => {
         message: "End date must be after start date"
       });
     }
-    const newEvent = new Event({
+    
+    // Process event data
+    const eventData = {
       ...req.body,
       userId,
       start_date: addDays(startDate, 1),
       end_date: addDays(endDate, 1)
-    });
+    };
+    
+    // Process reminders if provided
+    if (req.body.reminders && Array.isArray(req.body.reminders) && req.body.reminders.length > 0) {
+      const eventStartTime = eventData.eventMode === 'timed' && eventData.startTime 
+        ? new Date(eventData.startTime)
+        : addDays(startDate, 1);
+      
+      eventData.reminders = await notificationService.scheduleEventReminders({
+        ...eventData,
+        start_date: eventStartTime
+      });
+    }
+    
+    const newEvent = new Event(eventData);
 
     await newEvent.save();
     if (req.wss) {

@@ -1,8 +1,12 @@
 import '../utils/imports.dart';
 import '../models/events.dart' as eventModel;
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+// COMMENTED OUT: http import - no longer using HTTP for event sync, using WebSocket only
+// import 'package:http/http.dart' as http;
 import '../widgets/different_month_day.dart';
+import '../services/notification_service.dart';
+import '../widgets/notification_popup.dart';
+import 'dart:async';
 
 class FullScreenCalendar extends StatefulWidget {
   @override
@@ -12,7 +16,8 @@ class FullScreenCalendar extends StatefulWidget {
 class _FullScreenCalendarState extends State<FullScreenCalendar> {
   DateTime _focusedDay = DateTime.now();
   late final Box<eventModel.Event> _eventsBox;
-  late final Box<eventModel.Event> _pendingOperationsBox;
+  // COMMENTED OUT: pendingEvents mechanism - now using WebSocket only
+  // late final Box<eventModel.Event> _pendingOperationsBox;
   DateTime? _selectedDay;
   final Uuid _uuid = Uuid();
   OverlayEntry? _overlayEntry;
@@ -26,6 +31,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   final String _newEventDescription = '';
   final FocusNode _focusNode = FocusNode();
   bool _isWebSocketInitialized = false;
+  Timer? _notificationCheckTimer;
+  final NotificationService _notificationService = NotificationService();
 
   @override
   void initState() {
@@ -35,6 +42,92 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _initializeHiveBoxes();
     _connectToWebSocket();
     _focusNode.canRequestFocus = false;
+    _initializeNotifications();
+    _startNotificationChecker();
+  }
+
+  Future<void> _initializeNotifications() async {
+    try {
+      await _notificationService.initialize();
+
+      // Schedule notifications for existing events
+      await _scheduleExistingEventNotifications();
+    } catch (e) {
+      print('Error initializing notifications: $e');
+    }
+  }
+
+  Future<void> _scheduleExistingEventNotifications() async {
+    try {
+      final allEvents =
+          _events.values.expand((eventList) => eventList).toList();
+      for (var event in allEvents) {
+        if (event.reminders.isNotEmpty) {
+          await _notificationService.scheduleEventReminders(event);
+        }
+      }
+    } catch (e) {
+      print('Error scheduling existing event notifications: $e');
+    }
+  }
+
+  void _startNotificationChecker() {
+    // Check for notifications every minute
+    _notificationCheckTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (timer) => _checkForNotifications(),
+    );
+
+    // Also check immediately
+    _checkForNotifications();
+  }
+
+  Future<void> _checkForNotifications() async {
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
+
+      if (token == null) return;
+
+      final notifications = await _notificationService.getPendingNotifications(
+        token,
+      );
+
+      if (notifications.isNotEmpty) {
+        // Show the first pending notification as popup
+        final notification = notifications.first;
+
+        // Show popup if not already shown
+        NotificationOverlay.show(
+          context: context,
+          title: notification['eventTitle'] ?? 'Event Reminder',
+          description: notification['eventDescription'],
+          eventTime: DateTime.parse(notification['eventStartTime']),
+          activityType: notification['activityType'],
+          cropType: notification['cropType'],
+          fieldLocation: notification['fieldLocation'],
+          onTap: () {
+            // Navigate to event details or scroll to event on calendar
+            final eventDate = DateTime.parse(notification['eventStartTime']);
+            setState(() {
+              _selectedDay = eventDate;
+              _focusedDay = eventDate;
+            });
+          },
+          onDismiss: () async {
+            // Mark as notified
+            await _notificationService.markAsNotified(
+              eventId: notification['eventId'],
+              reminderIndex: notification['reminderIndex'],
+              token: token,
+            );
+          },
+          duration: const Duration(seconds: 10),
+        );
+      }
+    } catch (e) {
+      print('Error checking notifications: $e');
+    }
   }
 
   Future<void> _getCurrentUser() async {
@@ -69,7 +162,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     );
     if (connectivity.isOnline && !_isWebSocketInitialized) {
       _initializeWebSocket();
-      _processPendingEvents();
+      // COMMENTED OUT: pendingEvents processing - now using WebSocket only
+      // _processPendingEvents();
     } else if (!connectivity.isOnline) {
       _channel?.sink.close();
       _channel = null;
@@ -77,6 +171,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     }
   }
 
+  // COMMENTED OUT: pendingEvents mechanism - now using WebSocket only
+  /*
   void _processPendingEvents() async {
     if (!Provider.of<ConnectivityProvider>(context, listen: false).isOnline) {
       return;
@@ -100,7 +196,10 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       }
     }
   }
+  */
 
+  // COMMENTED OUT: HTTP sync functions - now using WebSocket only
+  /*
   Future<void> _syncEventToRemote(eventModel.Event event) async {
     try {
       final syncingEvent = event.copyWith(isSynced: false);
@@ -124,6 +223,11 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         _eventsBox.put(syncedEvent.id, syncedEvent);
         if (_pendingOperationsBox.containsKey(event.id)) {
           _pendingOperationsBox.delete(event.id);
+        }
+
+        // Schedule notifications for the new event
+        if (syncedEvent.reminders.isNotEmpty) {
+          await _notificationService.scheduleEventReminders(syncedEvent);
         }
       } else {
         final failedEvent = event.copyWith(
@@ -160,6 +264,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         if (_pendingOperationsBox.containsKey(event.id)) {
           _pendingOperationsBox.delete(event.id);
         }
+
+        // Reschedule notifications for updated event
+        await _notificationService.cancelEventReminders(event.id);
+        if (syncedEvent.reminders.isNotEmpty) {
+          await _notificationService.scheduleEventReminders(syncedEvent);
+        }
       } else {
         final failedEvent = event.copyWith(
           isSynced: false,
@@ -192,6 +302,9 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 204) {
+        // Cancel notifications for deleted event
+        await _notificationService.cancelEventReminders(eventId);
+
         if (_pendingOperationsBox.containsKey(eventId)) {
           _pendingOperationsBox.delete(eventId);
         }
@@ -209,16 +322,21 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       _showSyncStatusSnackbar("Network error. Will retry when online.");
     }
   }
+  */
 
+  // COMMENTED OUT: sync status snackbar - no longer using pending events sync
+  /*
   void _showSyncStatusSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: Duration(seconds: 2)),
     );
   }
+  */
 
   Future<void> _initializeHiveBoxes() async {
     _eventsBox = Hive.box<eventModel.Event>('events');
-    _pendingOperationsBox = Hive.box<eventModel.Event>('pending-operations');
+    // COMMENTED OUT: pendingEvents box - now using WebSocket only
+    // _pendingOperationsBox = Hive.box<eventModel.Event>('pending-operations');
   }
 
   void _initializeWebSocket() {
@@ -233,10 +351,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
       _channel?.stream.listen(
         (message) {
-          final data = jsonDecode(message);
-          if (data['type'] == 'ack') {
-            _pendingOperationsBox.delete(data['id']);
-          }
+          // COMMENTED OUT: pendingEvents ack handling - now using WebSocket only
+          // final data = jsonDecode(message);
+          // if (data['type'] == 'ack') {
+          //   _pendingOperationsBox.delete(data['id']);
+          // }
+          _processWebSocketMessage(message);
         },
         onError: (err) {
           debugPrint('WebSocket error: $err');
@@ -256,116 +376,169 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     eventModel.Event updatedEvent,
     String eventId,
   ) async {
-    final isOnline =
-        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
-    final eventToUpdate = updatedEvent.copyWith(isSynced: isOnline);
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final token = authService.token;
-    _eventsBox.put(eventToUpdate.id, eventToUpdate);
+    if (_channel == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Not connected. Please check your connection.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
 
-    if (isOnline) {
-      try {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Creating event...'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      } catch (e) {
-        print(e);
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Updating event...'),
+          duration: Duration(milliseconds: 500),
+        ),
+      );
+
+      // Store locally first for optimistic update
+      _eventsBox.put(updatedEvent.id, updatedEvent);
+
+      // Send via WebSocket
+      _channel!.sink.add(
+        jsonEncode({
+          'action': 'updateEvent',
+          'eventId': eventId,
+          'updates': {
+            'title': updatedEvent.title,
+            'start_date': updatedEvent.startDate.toIso8601String(),
+            'end_date': updatedEvent.endDate?.toIso8601String(),
+            'description': updatedEvent.description,
+            'eventMode': updatedEvent.eventMode,
+            'startTime': updatedEvent.startTime?.toIso8601String(),
+            'endTime': updatedEvent.endTime?.toIso8601String(),
+            'cropType': updatedEvent.cropType,
+            'cropVariety': updatedEvent.cropVariety,
+            'activityType': updatedEvent.activityType,
+            'fieldLocation': updatedEvent.fieldLocation,
+            'equipmentNeeded': updatedEvent.equipmentNeeded,
+            'reminders': updatedEvent.reminders.map((r) => r.toJson()).toList(),
+            'reminderSettings': updatedEvent.reminderSettings,
+          },
+        }),
+      );
+
+      // Reschedule notifications for updated event
+      await _notificationService.cancelEventReminders(eventId);
+      if (updatedEvent.reminders.isNotEmpty) {
+        await _notificationService.scheduleEventReminders(updatedEvent);
       }
-      _syncUpdateToRemote(eventToUpdate);
-    } else {
-      try {
-        final pendingEvent = eventToUpdate.copyWith(
-          isSynced: false,
-          changeType: "UPDATE",
-        );
-
-        if (_channel == null || token == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Not connected or not authenticated'),
-              duration: Duration(milliseconds: 90),
-            ),
-          );
-          return;
-        }
-
-        _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
-        _showSyncStatusSnackbar("Update saved locally. Will sync when online.");
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Updating event...'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update event: $e'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update event: $e'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
   Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
-    final isOnline =
-        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final token = authService.token;
-
-    final newEvent = eventModel.Event.create(
-      id: _uuid.v4(),
-      title: eventData['title'],
-      description: eventData['description'],
-      startDate: DateFormat("dd-MM-yyyy").parse(eventData['start_date']),
-      userId: _currentUserId,
-      changeType: "CREATE",
-      endDate: DateFormat("dd-MM-yyyy").parse(eventData['end_date']),
-    );
-    final eventToStore = newEvent.copyWith(isSynced: isOnline);
-    _eventsBox.put(eventToStore.id, eventToStore);
-    if (isOnline) {
-      try {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Creating event...'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      } catch (e) {
-        print(e);
-      }
-      _syncEventToRemote(eventToStore);
-    } else {
-      try {
-        final pendingEvent = eventToStore.copyWith(
-          isSynced: false,
-          changeType: "CREATE",
-        );
-        _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
-        _showSyncStatusSnackbar("Event saved locally. Will sync when online.");
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create event: $e'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      }
-    }
-    if (_channel == null || token == null) {
+    if (_channel == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Not connected or not authenticated'),
-          duration: Duration(milliseconds: 90),
+          content: Text('Not connected. Please check your connection.'),
+          duration: Duration(seconds: 2),
         ),
       );
       return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Creating event...'),
+          duration: Duration(milliseconds: 500),
+        ),
+      );
+
+      // Create temporary local event for optimistic update
+      final tempId = _uuid.v4();
+      final newEvent = eventModel.Event.create(
+        id: tempId,
+        title: eventData['title'] ?? '',
+        description: eventData['description'],
+        startDate:
+            eventData['start_date'] is DateTime
+                ? eventData['start_date']
+                : DateFormat("dd-MM-yyyy").parse(eventData['start_date']),
+        userId: _currentUserId ?? '',
+        endDate:
+            eventData['end_date'] != null
+                ? (eventData['end_date'] is DateTime
+                    ? eventData['end_date']
+                    : DateFormat("dd-MM-yyyy").parse(eventData['end_date']))
+                : null,
+        eventMode: eventData['eventMode'] ?? 'all-day',
+        startTime: eventData['startTime'],
+        endTime: eventData['endTime'],
+        cropType: eventData['cropType'],
+        cropVariety: eventData['cropVariety'],
+        activityType: eventData['activityType'],
+        fieldLocation: eventData['fieldLocation'],
+        equipmentNeeded:
+            eventData['equipmentNeeded'] != null
+                ? List<String>.from(eventData['equipmentNeeded'])
+                : [],
+        reminders:
+            eventData['reminders'] != null
+                ? (eventData['reminders'] as List)
+                    .map((r) => eventModel.Reminder.fromJson(r))
+                    .toList()
+                : [],
+        reminderSettings: eventData['reminderSettings'],
+      );
+
+      // Store locally for optimistic update (will be replaced with backend ID)
+      _eventsBox.put(tempId, newEvent);
+
+      // Prepare event data for WebSocket (convert dates to ISO strings)
+      final eventPayload = {
+        'title': eventData['title'] ?? '',
+        'start_date':
+            (eventData['start_date'] is DateTime
+                    ? eventData['start_date']
+                    : DateFormat("dd-MM-yyyy").parse(eventData['start_date']))
+                .toIso8601String(),
+        'end_date':
+            eventData['end_date'] != null
+                ? (eventData['end_date'] is DateTime
+                        ? eventData['end_date']
+                        : DateFormat("dd-MM-yyyy").parse(eventData['end_date']))
+                    .toIso8601String()
+                : null,
+        'description': eventData['description'],
+        'eventMode': eventData['eventMode'] ?? 'all-day',
+        'startTime': eventData['startTime']?.toIso8601String(),
+        'endTime': eventData['endTime']?.toIso8601String(),
+        'cropType': eventData['cropType'],
+        'cropVariety': eventData['cropVariety'],
+        'activityType': eventData['activityType'],
+        'fieldLocation': eventData['fieldLocation'],
+        'equipmentNeeded': eventData['equipmentNeeded'] ?? [],
+        'reminders': eventData['reminders'] ?? [],
+        'reminderSettings': eventData['reminderSettings'],
+      };
+
+      // Send via WebSocket
+      _channel!.sink.add(
+        jsonEncode({'action': 'createEvent', 'event': eventPayload}),
+      );
+
+      // Schedule notifications for the new event
+      if (newEvent.reminders.isNotEmpty) {
+        await _notificationService.scheduleEventReminders(newEvent);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create event: $e'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -401,23 +574,56 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       final responseData = json.decode(message);
 
       if (responseData["type"] == "events") {
-        final newEvents = <String, List<eventModel.Event>>{};
-        final newEventIds = <String>[];
+        // Replace all events with server data
+        final updatedEvents = <String, List<eventModel.Event>>{};
+        final updatedEventIds = <String>[];
 
         for (var eventData in responseData["data"]) {
-          final eventId = eventData['id'].toString();
-          if (!_events.containsKey(eventId)) {
-            newEvents[eventId] = [];
-            newEventIds.add(eventId);
-          }
+          try {
+            final event = eventModel.Event.fromJson(eventData);
+            final eventId = event.id;
 
-          newEvents[eventId]!.add(eventModel.Event.fromJson(eventData));
+            // Group events by date key for calendar display
+            final dateKey = DateFormat('yyyy-MM-dd').format(event.startDate);
+            if (!updatedEvents.containsKey(dateKey)) {
+              updatedEvents[dateKey] = [];
+            }
+            updatedEvents[dateKey]!.add(event);
+
+            // Also store by event ID for quick lookup
+            if (!updatedEvents.containsKey(eventId)) {
+              updatedEvents[eventId] = [];
+              updatedEventIds.add(eventId);
+            }
+
+            // Update Hive box
+            _eventsBox.put(eventId, event);
+
+            // Schedule notifications if needed (async, but don't await here)
+            if (event.reminders.isNotEmpty) {
+              _notificationService.scheduleEventReminders(event);
+            }
+          } catch (e) {
+            print('Error parsing event: $e');
+          }
         }
 
         setState(() {
-          _events.addAll(newEvents);
-          _eventIds.addAll(newEventIds);
-          _eventIds = _eventIds.toSet().toList();
+          // Rebuild events map from server data
+          _events.clear();
+          _eventIds.clear();
+
+          // Group events by date for calendar display
+          for (var entry in updatedEvents.entries) {
+            final key = entry.key;
+            if (!key.contains('-') || key.length == 10) {
+              // This is a date key (yyyy-MM-dd format)
+              _events[key] = entry.value;
+            }
+          }
+
+          // Also keep event IDs for reference
+          _eventIds = updatedEventIds;
         });
       } else if (responseData["type"] == "eventCreated") {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -426,8 +632,10 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             duration: Duration(seconds: 2),
           ),
         );
+
+        // Refresh events from server to get the backend ID
         setState(() {
-          _channel?.sink.add('{"action":"refresh"}');
+          _channel?.sink.add(jsonEncode({'action': 'refresh'}));
         });
       } else if (responseData["type"] == "eventUpdated") {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -439,12 +647,36 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
         setState(() {
           if (responseData["event"] != null) {
-            final updatedEvent = eventModel.Event.fromJson(
-              responseData["event"],
-            );
-            _events[updatedEvent.id] = [updatedEvent];
+            try {
+              final updatedEvent = eventModel.Event.fromJson(
+                responseData["event"],
+              );
+              final dateKey = DateFormat(
+                'yyyy-MM-dd',
+              ).format(updatedEvent.startDate);
+
+              // Update local storage
+              _eventsBox.put(updatedEvent.id, updatedEvent);
+
+              // Update events map
+              if (!_events.containsKey(dateKey)) {
+                _events[dateKey] = [];
+              }
+              _events[dateKey]!.removeWhere((e) => e.id == updatedEvent.id);
+              _events[dateKey]!.add(updatedEvent);
+
+              // Reschedule notifications
+              _notificationService.cancelEventReminders(updatedEvent.id);
+              if (updatedEvent.reminders.isNotEmpty) {
+                _notificationService.scheduleEventReminders(updatedEvent);
+              }
+            } catch (e) {
+              print('Error updating event from server: $e');
+              // Refresh if parsing fails
+              _channel?.sink.add(jsonEncode({'action': 'refresh'}));
+            }
           } else {
-            _channel?.sink.add('{"action":"refresh"}');
+            _channel?.sink.add(jsonEncode({'action': 'refresh'}));
           }
         });
       } else if (responseData["type"] == "eventDeleted") {
@@ -458,10 +690,24 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         setState(() {
           if (responseData["eventId"] != null) {
             final eventId = responseData["eventId"].toString();
+
+            // Remove from Hive
+            _eventsBox.delete(eventId);
+
+            // Remove from events map
             _events.remove(eventId);
             _eventIds.remove(eventId);
+
+            // Also remove from date-based entries
+            _events.forEach((key, events) {
+              events.removeWhere((e) => e.id == eventId);
+            });
+            _events.removeWhere((key, events) => events.isEmpty);
+
+            // Cancel notifications
+            _notificationService.cancelEventReminders(eventId);
           } else {
-            _channel?.sink.add('{"action":"refresh"}');
+            _channel?.sink.add(jsonEncode({'action': 'refresh'}));
           }
         });
       } else if (responseData["type"] == "error") {
@@ -486,56 +732,45 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     String eventId,
     eventModel.Event event,
   ) async {
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final token = authService.token;
-    final isOnline =
-        Provider.of<ConnectivityProvider>(context, listen: false).isOnline;
-    _eventsBox.delete(eventId);
-    if (isOnline) {
-      try {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Deleting event...'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-        _syncDeleteToRemote(eventId, event);
-      } catch (e) {
-        print(e);
-      }
-    } else {
-      try {
-        final pendingEvent = event.copyWith(
-          isSynced: false,
-          changeType: "DELETE",
-        );
-        _pendingOperationsBox.put(pendingEvent.id, pendingEvent);
-        _showSyncStatusSnackbar(
-          "Deletion saved locally. Will sync when online.",
-        );
-        if (_channel == null || token == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Not connected or not authenticated'),
-              duration: Duration(milliseconds: 90),
-            ),
-          );
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Deleting event...'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete event: $e'),
-            duration: Duration(milliseconds: 90),
-          ),
-        );
-      }
+    if (_channel == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Not connected. Please check your connection.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Deleting event...'),
+          duration: Duration(milliseconds: 500),
+        ),
+      );
+
+      // Delete locally first for optimistic update
+      _eventsBox.delete(eventId);
+      setState(() {
+        _events.remove(eventId);
+        _eventIds.remove(eventId);
+      });
+
+      // Cancel notifications for deleted event
+      await _notificationService.cancelEventReminders(eventId);
+
+      // Send via WebSocket
+      _channel!.sink.add(
+        jsonEncode({'action': 'deleteEvent', 'eventId': eventId}),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete event: $e'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -733,7 +968,9 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                     title: Container(
                                       width: double.infinity,
                                       child: Text(
-                                        event.title ?? 'No Title',
+                                        event.title.isNotEmpty
+                                            ? event.title
+                                            : 'No Title',
                                         style: TextStyle(
                                           fontSize: 18, // Larger font size
                                           fontWeight: FontWeight.bold, // Bold
@@ -1183,9 +1420,10 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
   @override
   void dispose() {
+    _notificationCheckTimer?.cancel();
     _channel?.sink.close();
     _removeOverlay();
-    _animationController?.dispose(); // Add this if not already present
+    _animationController?.dispose();
     super.dispose();
   }
 }

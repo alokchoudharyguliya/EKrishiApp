@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 // Assume you use a package like flutter_webrtc for actual camera feed
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:newscalendar/config/camera_config.dart';
 
 class FarmCCTV extends StatefulWidget {
   const FarmCCTV({Key? key}) : super(key: key);
@@ -10,8 +11,10 @@ class FarmCCTV extends StatefulWidget {
 }
 
 class _FarmCCTVState extends State<FarmCCTV> {
-  int _selectedCamera = 1;
-  final int _cameraCount = 4; // Assume 4 cameras for demo
+  final CameraConfigService _cameraService = CameraConfigService();
+  List<CameraConfig> _cameras = [];
+  bool _isLoading = true;
+  CameraConfig? _selectedCamera;
   RTCVideoRenderer _renderer =
       RTCVideoRenderer(); // Uncomment if using flutter_webrtc
   MediaStream? _localStream;
@@ -20,8 +23,34 @@ class _FarmCCTVState extends State<FarmCCTV> {
   void initState() {
     super.initState();
     _renderer.initialize(); // Uncomment if using flutter_webrtc
-    _connectToCamera(_selectedCamera); // Uncomment if using flutter_webrtc
+    _loadCameras();
     _startLocalCamera();
+  }
+
+  /// Load cameras from configuration
+  Future<void> _loadCameras() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final cameras = await _cameraService.getEnabledCameras();
+      setState(() {
+        _cameras = cameras;
+        _isLoading = false;
+        // Select first camera if available
+        if (_cameras.isNotEmpty) {
+          _selectedCamera = _cameras.first;
+          _connectToCamera(_selectedCamera!);
+        }
+      });
+    } catch (e) {
+      print('Error loading cameras: $e');
+      setState(() {
+        _isLoading = false;
+        _cameras = [];
+      });
+    }
   }
 
   Future<void> _startLocalCamera() async {
@@ -49,12 +78,13 @@ class _FarmCCTVState extends State<FarmCCTV> {
     super.dispose();
   }
 
-  void _connectToCamera(int cameraNumber) async {
+  void _connectToCamera(CameraConfig camera) async {
     setState(() {
-      _selectedCamera = cameraNumber;
+      _selectedCamera = camera;
     });
     // Actual WebRTC connection code goes here
-    // await _renderer.srcObject = await createLocalMediaStream('key');
+    // Use camera.streamId for WebRTC connection
+    // await _renderer.srcObject = await createLocalMediaStream(camera.streamId);
   }
 
   @override
@@ -64,140 +94,180 @@ class _FarmCCTVState extends State<FarmCCTV> {
         const SizedBox(height: 16),
         Text('Farm CCTV', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
-        // Main camera player at the top
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.green, width: 2),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
+
+        // Loading indicator
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.all(32.0),
+            child: CircularProgressIndicator(),
+          )
+        else if (_cameras.isEmpty)
+          // No cameras available message
+          Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
               children: [
-                // Uncomment below if using flutter_webrtc
-                RTCVideoView(_renderer),
-                // For demo, show a placeholder image
-                Icon(Icons.videocam, color: Colors.white54, size: 80),
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Camera $_selectedCamera',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No cameras configured',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
-                // Simulate a "Live" badge
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add camera configurations to assets/config/cameras.json',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        // Grid of camera buttons
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _cameraCount,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1,
-            ),
-            itemBuilder: (context, index) {
-              final camNum = index + 1;
-              final isSelected = camNum == _selectedCamera;
-              return GestureDetector(
-                onTap: () => _connectToCamera(camNum),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.green[100] : Colors.grey[200],
-                    border: Border.all(
-                      color: isSelected ? Colors.green : Colors.grey,
-                      width: isSelected ? 2.5 : 1,
+          )
+        else ...[
+          // Main camera player at the top
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green, width: 2),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Uncomment below if using flutter_webrtc
+                  RTCVideoView(_renderer),
+                  // For demo, show a placeholder image
+                  Icon(Icons.videocam, color: Colors.white54, size: 80),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _selectedCamera?.name ?? 'No Camera Selected',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.green, width: 2),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              RTCVideoView(
-                                _renderer,
-                                objectFit:
-                                    RTCVideoViewObjectFit
-                                        .RTCVideoViewObjectFitCover,
-                              ),
-                              // ... (rest of your overlay widgets)
-                            ],
-                          ),
-                        ),
+                  // Simulate a "Live" badge
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Cam $camNum',
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'LIVE',
                         style: TextStyle(
-                          color:
-                              isSelected ? Colors.green[900] : Colors.grey[800],
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
+                ],
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 18),
+          // Grid of camera buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _cameras.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1,
+              ),
+              itemBuilder: (context, index) {
+                final camera = _cameras[index];
+                final isSelected = _selectedCamera?.id == camera.id;
+                return GestureDetector(
+                  onTap: () => _connectToCamera(camera),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.green[100] : Colors.grey[200],
+                      border: Border.all(
+                        color: isSelected ? Colors.green : Colors.grey,
+                        width: isSelected ? 2.5 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.green, width: 2),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                RTCVideoView(
+                                  _renderer,
+                                  objectFit:
+                                      RTCVideoViewObjectFit
+                                          .RTCVideoViewObjectFitCover,
+                                ),
+                                // ... (rest of your overlay widgets)
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: Text(
+                            camera.name,
+                            style: TextStyle(
+                              color:
+                                  isSelected
+                                      ? Colors.green[900]
+                                      : Colors.grey[800],
+                              fontWeight:
+                                  isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
       ],
     );

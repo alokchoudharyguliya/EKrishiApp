@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:newscalendar/services/chatbot_service.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({Key? key}) : super(key: key);
@@ -11,6 +13,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
+  String? _sessionId;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -18,7 +22,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     // Add welcome message
     _messages.add(
       ChatMessage(
-        text: 'Hello! How can I help you today?',
+        text: 'Hello! I\'m your agriculture assistant. How can I help you with farming today?',
         isUser: false,
         timestamp: DateTime.now(),
       ),
@@ -32,34 +36,74 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isLoading) return;
 
-    // Add user message
+    // Add user message to UI immediately
     setState(() {
       _messages.add(
         ChatMessage(text: text, isUser: true, timestamp: DateTime.now()),
       );
+      _isLoading = true;
     });
 
+    final userMessage = text;
     _messageController.clear();
     _scrollToBottom();
 
-    // Simulate bot response (placeholder - will be replaced with API call)
-    Future.delayed(const Duration(milliseconds: 500), () {
-      setState(() {
-        _messages.add(
-          ChatMessage(
-            text:
-                'This is a placeholder response. Backend API integration coming soon.',
-            isUser: false,
-            timestamp: DateTime.now(),
+    try {
+      // Call backend API
+      final response = await ChatbotService.sendMessage(
+        context,
+        userMessage,
+        sessionId: _sessionId,
+      );
+
+      // Update session ID if this is a new conversation
+      if (_sessionId == null && response['sessionId'] != null) {
+        _sessionId = response['sessionId'] as String;
+      }
+
+      // Add bot response
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: response['response'] as String,
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      // Show error message
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: 'Sorry, I encountered an error: ${e.toString().replaceAll("Exception: ", "")}. Please try again.',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+          _isLoading = false;
+        });
+        _scrollToBottom();
+
+        // Show snackbar with error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().replaceAll("Exception: ", "")}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
-      });
-      _scrollToBottom();
-    });
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -153,10 +197,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                   const SizedBox(width: 8),
                   CircleAvatar(
                     backgroundColor: Theme.of(context).colorScheme.primary,
-                    child: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.white),
-                      onPressed: _sendMessage,
-                    ),
+                    child: _isLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.send, color: Colors.white),
+                            onPressed: _sendMessage,
+                          ),
                   ),
                 ],
               ),
@@ -192,11 +244,68 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     : const Radius.circular(4),
           ),
         ),
-        child: Text(
-          message.text,
-          style: TextStyle(
-            color: message.isUser ? Colors.white : Colors.black87,
-            fontSize: 15,
+        child: MarkdownBody(
+          data: message.text,
+          selectable: true,
+          styleSheet: MarkdownStyleSheet(
+            p: TextStyle(
+              color: message.isUser ? Colors.white : Colors.black87,
+              fontSize: 15,
+              height: 1.4,
+            ),
+            strong: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: message.isUser ? Colors.white : Colors.black87,
+            ),
+            em: TextStyle(
+              fontStyle: FontStyle.italic,
+              color: message.isUser ? Colors.white : Colors.black87,
+            ),
+            listBullet: TextStyle(
+              color: message.isUser ? Colors.white : Colors.black87,
+              fontSize: 15,
+            ),
+            listIndent: 24.0,
+            h1: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: message.isUser ? Colors.white : Colors.black87,
+            ),
+            h2: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: message.isUser ? Colors.white : Colors.black87,
+            ),
+            h3: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: message.isUser ? Colors.white : Colors.black87,
+            ),
+            code: TextStyle(
+              backgroundColor: message.isUser 
+                  ? Colors.white.withOpacity(0.2) 
+                  : Colors.grey[300],
+              color: message.isUser ? Colors.white : Colors.black87,
+              fontFamily: 'monospace',
+            ),
+            codeblockDecoration: BoxDecoration(
+              color: message.isUser 
+                  ? Colors.white.withOpacity(0.2) 
+                  : Colors.grey[300],
+              borderRadius: BorderRadius.circular(4),
+            ),
+            blockquote: TextStyle(
+              color: message.isUser ? Colors.white70 : Colors.black54,
+              fontStyle: FontStyle.italic,
+            ),
+            blockquoteDecoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: message.isUser ? Colors.white70 : Colors.grey[400]!,
+                  width: 4,
+                ),
+              ),
+            ),
           ),
         ),
       ),

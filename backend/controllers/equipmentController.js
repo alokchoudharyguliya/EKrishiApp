@@ -3,7 +3,28 @@ const fs = require('fs');
 const Equipment = require('../models/equipment');
 
 function buildImageUrl(req, filename) {
-  return `${req.protocol}://${req.get('host')}/equipment/${filename}`;
+  // Use BASE_URL from environment if available (most reliable)
+  if (process.env.BASE_URL) {
+    const baseUrl = process.env.BASE_URL.endsWith('/') 
+      ? process.env.BASE_URL.slice(0, -1) 
+      : process.env.BASE_URL;
+    return `${baseUrl}/equipment/${filename}`;
+  }
+  
+  // Fallback to request-based URL construction
+  // Handle proxy headers (X-Forwarded-Host, X-Forwarded-Proto) if present
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const host = req.get('x-forwarded-host') || req.get('host') || (process.env.PORT ? `localhost:${process.env.PORT}` : 'localhost:3001');
+  const imageUrl = `${protocol}://${host}/equipment/${filename}`;
+  
+  // Debug log to help diagnose URL issues
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Equipment] Generated image URL: ${imageUrl}`);
+    console.log(`[Equipment] Request host: ${req.get('host')}, protocol: ${req.protocol}`);
+    console.log(`[Equipment] X-Forwarded-Host: ${req.get('x-forwarded-host')}, X-Forwarded-Proto: ${req.get('x-forwarded-proto')}`);
+  }
+  
+  return imageUrl;
 }
 
 exports.createEquipment = async (req, res) => {

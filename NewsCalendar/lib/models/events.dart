@@ -1,6 +1,49 @@
 import 'package:hive/hive.dart';
 part 'events.g.dart';
 
+// Reminder model for event reminders
+@HiveType(typeId: 1)
+class Reminder {
+  @HiveField(0)
+  final DateTime reminderTime;
+  @HiveField(1)
+  final String reminderType; // 'days', 'hours', or 'minutes'
+  @HiveField(2)
+  final int reminderValue;
+  @HiveField(3)
+  final bool isNotified;
+  @HiveField(4)
+  final String? notificationId;
+
+  Reminder({
+    required this.reminderTime,
+    required this.reminderType,
+    required this.reminderValue,
+    this.isNotified = false,
+    this.notificationId,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'reminderTime': reminderTime.toIso8601String(),
+      'reminderType': reminderType,
+      'reminderValue': reminderValue,
+      'isNotified': isNotified,
+      'notificationId': notificationId,
+    };
+  }
+
+  factory Reminder.fromJson(Map<String, dynamic> json) {
+    return Reminder(
+      reminderTime: DateTime.parse(json['reminderTime']),
+      reminderType: json['reminderType'],
+      reminderValue: json['reminderValue'],
+      isNotified: json['isNotified'] ?? false,
+      notificationId: json['notificationId'],
+    );
+  }
+}
+
 @HiveType(typeId: 0)
 class Event {
   @HiveField(0)
@@ -29,6 +72,34 @@ class Event {
   final bool isDeleted;
   @HiveField(12)
   String? changeType;
+  
+  // Event mode: 'all-day' or 'timed'
+  @HiveField(13)
+  final String eventMode;
+  
+  // Time fields (for timed events)
+  @HiveField(14)
+  final DateTime? startTime;
+  @HiveField(15)
+  final DateTime? endTime;
+  
+  // Farmer-specific fields
+  @HiveField(16)
+  final String? cropType;
+  @HiveField(17)
+  final String? cropVariety;
+  @HiveField(18)
+  final String? activityType;
+  @HiveField(19)
+  final String? fieldLocation;
+  @HiveField(20)
+  final List<String> equipmentNeeded;
+  
+  // Reminder system
+  @HiveField(21)
+  final List<Reminder> reminders;
+  @HiveField(22)
+  final Map<String, dynamic>? reminderSettings;
 
   Event({
     required this.id,
@@ -44,6 +115,16 @@ class Event {
     required this.lastUpdated,
     this.version = 0,
     this.changeType,
+    this.eventMode = 'all-day',
+    this.startTime,
+    this.endTime,
+    this.cropType,
+    this.cropVariety,
+    this.activityType,
+    this.fieldLocation,
+    this.equipmentNeeded = const [],
+    this.reminders = const [],
+    this.reminderSettings,
   });
 
   Map<String, dynamic> toJson() {
@@ -61,6 +142,16 @@ class Event {
       'version': version,
       'isDeleted': isDeleted,
       'changeType': changeType,
+      'eventMode': eventMode,
+      'startTime': startTime?.toIso8601String(),
+      'endTime': endTime?.toIso8601String(),
+      'cropType': cropType,
+      'cropVariety': cropVariety,
+      'activityType': activityType,
+      'fieldLocation': fieldLocation,
+      'equipmentNeeded': equipmentNeeded,
+      'reminders': reminders.map((r) => r.toJson()).toList(),
+      'reminderSettings': reminderSettings,
     };
   }
 
@@ -90,6 +181,20 @@ class Event {
         ),
         isSynced: json['isSynced'] ?? true,
         version: json['version'] ?? 0,
+        eventMode: json['eventMode'] ?? 'all-day',
+        startTime: json['startTime'] != null ? _parseDateTime(json['startTime']) : null,
+        endTime: json['endTime'] != null ? _parseDateTime(json['endTime']) : null,
+        cropType: json['cropType'],
+        cropVariety: json['cropVariety'],
+        activityType: json['activityType'],
+        fieldLocation: json['fieldLocation'],
+        equipmentNeeded: json['equipmentNeeded'] != null 
+            ? List<String>.from(json['equipmentNeeded'])
+            : [],
+        reminders: json['reminders'] != null
+            ? (json['reminders'] as List).map((r) => Reminder.fromJson(r)).toList()
+            : [],
+        reminderSettings: json['reminderSettings'],
       );
     } catch (e) {
       throw FormatException('Failed to parse Event: $e\nJSON: $json');
@@ -123,6 +228,16 @@ class Event {
     bool? isDeleted,
     String? userId,
     String? changeType,
+    String? eventMode,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? cropType,
+    String? cropVariety,
+    String? activityType,
+    String? fieldLocation,
+    List<String>? equipmentNeeded,
+    List<Reminder>? reminders,
+    Map<String, dynamic>? reminderSettings,
   }) {
     return Event(
       isDeleted: isDeleted ?? this.isDeleted,
@@ -138,6 +253,16 @@ class Event {
       lastUpdated: lastUpdated ?? this.lastUpdated,
       version: version ?? this.version,
       changeType: changeType ?? this.changeType,
+      eventMode: eventMode ?? this.eventMode,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      cropType: cropType ?? this.cropType,
+      cropVariety: cropVariety ?? this.cropVariety,
+      activityType: activityType ?? this.activityType,
+      fieldLocation: fieldLocation ?? this.fieldLocation,
+      equipmentNeeded: equipmentNeeded ?? this.equipmentNeeded,
+      reminders: reminders ?? this.reminders,
+      reminderSettings: reminderSettings ?? this.reminderSettings,
     );
   }
 
@@ -166,6 +291,16 @@ class Event {
     required userId,
     bool isDeleted = false,
     String? changeType,
+    String eventMode = 'all-day',
+    DateTime? startTime,
+    DateTime? endTime,
+    String? cropType,
+    String? cropVariety,
+    String? activityType,
+    String? fieldLocation,
+    List<String> equipmentNeeded = const [],
+    List<Reminder> reminders = const [],
+    Map<String, dynamic>? reminderSettings,
   }) {
     final now = DateTime.now();
     return Event(
@@ -182,6 +317,16 @@ class Event {
       isSynced: false,
       version: 0,
       changeType: changeType,
+      eventMode: eventMode,
+      startTime: startTime,
+      endTime: endTime,
+      cropType: cropType,
+      cropVariety: cropVariety,
+      activityType: activityType,
+      fieldLocation: fieldLocation,
+      equipmentNeeded: equipmentNeeded,
+      reminders: reminders,
+      reminderSettings: reminderSettings,
     );
   }
 }

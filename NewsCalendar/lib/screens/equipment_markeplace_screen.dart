@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:path/path.dart' as path;
 import 'package:newscalendar/utils/imports.dart';
+import 'package:newscalendar/models/equipment.dart';
 
 class EquipmentMarketplaceScreen extends StatefulWidget {
   const EquipmentMarketplaceScreen({Key? key}) : super(key: key);
@@ -18,8 +21,8 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
   late TabController _tabController;
   bool _isLoading = true;
   String? _errorMessage;
-  final List<Map<String, dynamic>> _equipmentList = [];
-  final List<Map<String, dynamic>> _myTools = [];
+  final List<Equipment> _equipmentList = [];
+  final List<Equipment> _myTools = [];
   String? _currentUserId;
 
   @override
@@ -54,9 +57,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
       ..clear()
       ..addAll(
         _equipmentList.where(
-          (e) =>
-              _currentUserId != null &&
-              e['ownerId']?.toString() == _currentUserId,
+          (e) => _currentUserId != null && e.ownerId == _currentUserId,
         ),
       );
     setState(() {});
@@ -77,21 +78,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
         final List data = response.data['data'] as List;
         _equipmentList
           ..clear()
-          ..addAll(
-            data.map(
-              (e) => {
-                'id': e['_id'],
-                'name': e['name'] ?? '',
-                'description': e['description'] ?? '',
-                'price': e['price']?.toString() ?? '0',
-                'image': e['imageUrl'] ?? '',
-                'contact': e['contact'] ?? '',
-                'location': e['location'] ?? '',
-                'ownerId': e['owner']?.toString() ?? '',
-                'isAvailable': e['isAvailable'] == true,
-              },
-            ),
-          );
+          ..addAll(data.map((e) => Equipment.fromJson(e)));
         setState(() {
           _isLoading = false;
         });
@@ -136,33 +123,50 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
     }
   }
 
-  void _showAddToolDialog({Map<String, dynamic>? tool}) {
-    final nameController = TextEditingController(text: tool?['name'] ?? '');
+  /// Helper function to detect MediaType from file extension
+  MediaType _getImageMediaType(String filePath) {
+    final extension = path.extension(filePath).toLowerCase();
+    switch (extension) {
+      case '.jpg':
+      case '.jpeg':
+        return MediaType('image', 'jpeg');
+      case '.png':
+        return MediaType('image', 'png');
+      case '.gif':
+        return MediaType('image', 'gif');
+      case '.webp':
+        return MediaType('image', 'webp');
+      default:
+        // Default to jpeg if extension is unknown
+        return MediaType('image', 'jpeg');
+    }
+  }
+
+  void _showAddToolDialog({Equipment? tool}) {
+    final nameController = TextEditingController(text: tool?.name ?? '');
     final descriptionController = TextEditingController(
-      text: tool?['description'] ?? '',
+      text: tool?.description ?? '',
     );
     final priceController = TextEditingController(
-      text: tool?['price']?.toString().replaceAll('₹', '') ?? '',
+      text: tool != null ? tool.price.toString().replaceAll('₹', '') : '',
     );
-    final contactController = TextEditingController(
-      text: tool?['contact'] ?? '',
-    );
+    final contactController = TextEditingController(text: tool?.contact ?? '');
     final locationController = TextEditingController(
-      text: tool?['location'] ?? '',
+      text: tool?.location ?? '',
     );
-    bool isAvailable = tool?['isAvailable'] ?? true;
+    bool isAvailable = tool?.isAvailable ?? true;
 
     // State for image picker
     File? selectedImageFile;
     String? existingImageUrl;
 
     // If editing, preserve existing image URL
-    if (tool != null && tool['image'] != null) {
-      existingImageUrl = tool['image'];
+    if (tool != null && tool.imageUrl.isNotEmpty) {
+      existingImageUrl = tool.imageUrl;
     }
 
     final isEditing = tool != null;
-    final String? editingId = tool?['id']?.toString();
+    final String? editingId = tool?.id;
 
     final ImagePicker _picker = ImagePicker();
 
@@ -595,15 +599,35 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                           return;
                         }
 
-                        // Show loading indicator
+                        // Show loading indicator (compact dialog, not full screen)
                         if (context.mounted) {
                           Navigator.pop(context); // Close dialog first
                           showDialog(
                             context: context,
                             barrierDismissible: false,
+                            barrierColor: Colors.black54,
                             builder:
-                                (context) => const Center(
-                                  child: CircularProgressIndicator(),
+                                (context) => Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const CircularProgressIndicator(),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          isEditing
+                                              ? 'Updating equipment...'
+                                              : 'Adding equipment...',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                           );
                         }
@@ -623,10 +647,20 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
 
                           // Add image if selected
                           if (selectedImageFile != null) {
+                            // Detect image type from file extension
+                            final imageMediaType = _getImageMediaType(
+                              selectedImageFile!.path,
+                            );
+                            final fileExtension = path.extension(
+                              selectedImageFile!.path,
+                            );
+                            final filename =
+                                'equipment_${DateTime.now().millisecondsSinceEpoch}$fileExtension';
+
                             final multipartFile = await MultipartFile.fromFile(
                               selectedImageFile!.path,
-                              filename:
-                                  'equipment_${DateTime.now().millisecondsSinceEpoch}.jpg',
+                              filename: filename,
+                              contentType: imageMediaType,
                             );
                             formData.files.add(
                               MapEntry('image', multipartFile),
@@ -665,34 +699,34 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                             );
                           }
 
-                          // Close loading dialog
-                          if (context.mounted && !dialogClosed) {
-                            Navigator.pop(context);
-                            dialogClosed = true;
-                          }
-
+                          // Validate response before closing dialog
                           final ok =
                               (response.statusCode == 201 ||
                                   response.statusCode == 200) &&
                               response.data != null &&
                               response.data['success'] == true;
+
+                          // Close loading dialog only after validating response is successful
+                          if (ok && context.mounted && !dialogClosed) {
+                            Navigator.pop(context);
+                            dialogClosed = true;
+                          }
+
                           if (ok) {
-                            final e = response.data['data'];
-                            final item = {
-                              'id': e['_id'],
-                              'name': e['name'] ?? '',
-                              'description': e['description'] ?? '',
-                              'price': e['price']?.toString() ?? '0',
-                              'image': e['imageUrl'] ?? '',
-                              'contact': e['contact'] ?? '',
-                              'location': e['location'] ?? '',
-                              'ownerId': e['owner']?.toString() ?? '',
-                              'isAvailable': e['isAvailable'] == true,
-                            };
+                            // Ensure response data exists and has the expected structure
+                            final responseData = response.data['data'];
+                            if (responseData == null) {
+                              throw Exception(
+                                'Invalid response: data is missing',
+                              );
+                            }
+
+                            final e = responseData;
+                            final item = Equipment.fromJson(e);
                             setState(() {
                               if (isEditing && editingId != null) {
                                 final idx = _equipmentList.indexWhere(
-                                  (x) => x['id'] == editingId,
+                                  (x) => x.id == editingId,
                                 );
                                 if (idx != -1) _equipmentList[idx] = item;
                               } else {
@@ -714,6 +748,11 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                               );
                             }
                           } else {
+                            // Close loading dialog since response was not successful
+                            if (context.mounted && !dialogClosed) {
+                              Navigator.pop(context);
+                              dialogClosed = true;
+                            }
                             // Equipment was not added/updated
                             String actionText = isEditing ? 'updated' : 'added';
                             throw Exception(
@@ -834,7 +873,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
           (context) => AlertDialog(
             title: const Text('Remove Tool'),
             content: Text(
-              'Are you sure you want to remove "${tool['name']}" from your tools?',
+              'Are you sure you want to remove "${tool.name}" from your tools?',
             ),
             actions: [
               TextButton(
@@ -851,7 +890,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                       listen: false,
                     );
                     final token = await authService.getAuthToken();
-                    final id = tool['id'];
+                    final id = tool.id;
                     final res = await dio.delete(
                       '$BASE_URL/api/equipment/$id',
                       options: Options(
@@ -863,7 +902,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                     );
                     if (res.statusCode == 200 && res.data['success'] == true) {
                       setState(() {
-                        _equipmentList.removeWhere((e) => e['id'] == id);
+                        _equipmentList.removeWhere((e) => e.id == id);
                       });
                       _refreshMyTools();
                       if (context.mounted) Navigator.pop(context);
@@ -965,7 +1004,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                   top: Radius.circular(12),
                                 ),
                                 child: Image.network(
-                                  tool['image'],
+                                  tool.imageUrl.isNotEmpty ? tool.imageUrl : '',
                                   height: 180,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
@@ -990,7 +1029,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            tool['name'],
+                                            tool.name,
                                             style: const TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
@@ -1004,7 +1043,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                           ),
                                           decoration: BoxDecoration(
                                             color:
-                                                tool['isAvailable']
+                                                tool.isAvailable
                                                     ? Colors.green
                                                     : Colors.red,
                                             borderRadius: BorderRadius.circular(
@@ -1012,7 +1051,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                             ),
                                           ),
                                           child: Text(
-                                            tool['isAvailable']
+                                            tool.isAvailable
                                                 ? 'Available'
                                                 : 'Unavailable',
                                             style: const TextStyle(
@@ -1024,7 +1063,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      tool['description'],
+                                      tool.description,
                                       style: TextStyle(color: Colors.grey[700]),
                                     ),
                                     const SizedBox(height: 12),
@@ -1037,7 +1076,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          tool['price'],
+                                          '₹${tool.price}',
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
@@ -1055,7 +1094,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                           color: Colors.grey,
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(tool['location']),
+                                        Text(tool.location),
                                       ],
                                     ),
                                     const SizedBox(height: 12),
@@ -1130,7 +1169,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                         final tool = _equipmentList[index];
                         final isMyTool =
                             _currentUserId != null &&
-                            tool['ownerId'] == _currentUserId;
+                            tool.ownerId == _currentUserId;
 
                         return Card(
                           elevation: 3,
@@ -1146,7 +1185,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                   top: Radius.circular(12),
                                 ),
                                 child: Image.network(
-                                  tool['image'],
+                                  tool.imageUrl.isNotEmpty ? tool.imageUrl : '',
                                   height: 180,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
@@ -1171,7 +1210,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            tool['name'],
+                                            tool.name,
                                             style: const TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
@@ -1185,7 +1224,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                           ),
                                           decoration: BoxDecoration(
                                             color:
-                                                tool['isAvailable']
+                                                tool.isAvailable
                                                     ? Colors.green
                                                     : Colors.red,
                                             borderRadius: BorderRadius.circular(
@@ -1193,7 +1232,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                             ),
                                           ),
                                           child: Text(
-                                            tool['isAvailable']
+                                            tool.isAvailable
                                                 ? 'Available'
                                                 : 'Unavailable',
                                             style: const TextStyle(
@@ -1226,7 +1265,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                       ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      tool['description'],
+                                      tool.description,
                                       style: TextStyle(color: Colors.grey[700]),
                                     ),
                                     const SizedBox(height: 12),
@@ -1239,7 +1278,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          '₹${tool['price']}',
+                                          '₹${tool.price.toString()}',
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
@@ -1257,11 +1296,11 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                           color: Colors.grey,
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(tool['location']),
+                                        Text(tool.location),
                                       ],
                                     ),
                                     const SizedBox(height: 12),
-                                    if (!isMyTool && tool['isAvailable'])
+                                    if (!isMyTool && tool.isAvailable)
                                       Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.end,
@@ -1271,9 +1310,8 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                               backgroundColor: Colors.green,
                                             ),
                                             onPressed:
-                                                () => _launchCaller(
-                                                  tool['contact'],
-                                                ),
+                                                () =>
+                                                    _launchCaller(tool.contact),
                                             icon: const Icon(
                                               Icons.call,
                                               size: 16,
@@ -1284,7 +1322,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                                           OutlinedButton.icon(
                                             onPressed:
                                                 () => _launchWhatsApp(
-                                                  tool['contact'],
+                                                  tool.contact,
                                                 ),
                                             icon: const Icon(
                                               Icons.message,

@@ -18,6 +18,8 @@ const fileRoutes = require('./routes/filesRoutes.js');
 const aiRoutes = require('./routes/aiRoutes.js');
 const irrigationRoutes = require('./routes/irrigationRoutes.js');
 const equipmentRoutes = require('./routes/equipmentRoutes.js');
+const chatbotRoutes = require('./routes/chatbotRoutes.js');
+const notificationRoutes = require('./routes/notificationRoutes.js');
 
 const webrtcRoutes = require('./routes/webrtc');
 const MongoDBStore = require('connect-mongodb-session')(session);
@@ -57,21 +59,39 @@ const upload = multer({
 });
 
 const corsOptions = {
-    origin: [
-        'http://localhost:3000',
-        'http://localhost:54520',
-        'http://localhost:53589',
-        'http://localhost:59458',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:53589',
-        'http://127.0.0.1:59458',
-        'http://10.0.2.2:3000',
-        "http://127.0.0.1:53638",
-        "http://192.168.185.19:3000",
-        "http://192.168.185.15:60918"
-    ],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, Postman, curl)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:54520',
+            'http://localhost:53589',
+            'http://localhost:59458',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:53589',
+            'http://127.0.0.1:59458',
+            'http://10.0.2.2:3000',
+            "http://127.0.0.1:53638",
+            "http://192.168.185.19:3000",
+            "http://192.168.185.15:60918",
+            "http://172.31.37.15:3001"
+        ];
+        
+        // Allow any origin from 172.31.37.15 (for Flutter app on different ports)
+        if (origin.startsWith('http://172.31.37.15:') || origin.startsWith('https://172.31.37.15:')) {
+            return callback(null, true);
+        }
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Allow all for development - change to callback(new Error('Not allowed')) for production
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 };
 
 app.use(cors(corsOptions));
@@ -82,8 +102,34 @@ app.use(cors(corsOptions));
 //     databaseURL: process.env.FIREBASE_DATABASE_URL
 // });
 // const admin = require('./config/firebase.js');
-// Routes
 
+// Static serving for equipment images - MUST be before other routes to avoid conflicts
+const equipmentStaticPath = path.join(__dirname, 'uploads', 'equipment');
+console.log('[Equipment Static] Serving files from:', equipmentStaticPath);
+
+// Handle CORS for equipment static files
+app.use('/equipment', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Serve static files
+app.use('/equipment', express.static(equipmentStaticPath, {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  },
+  dotfiles: 'ignore',
+  index: false
+}));
+
+// Routes (mounted after static files to avoid conflicts)
 app.use('/api/equipment', equipmentRoutes);
 app.use(userRoutes);
 app.use(fileRoutes);
@@ -91,8 +137,8 @@ app.use(eventRoutes);
 app.use('/api/webrtc', webrtcRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/irrigation', irrigationRoutes);
-// Static serving for equipment images
-app.use('/equipment', express.static(path.join(__dirname, 'uploads', 'equipment')));
+app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/notifications', notificationRoutes);
 // const io = socketIo(server, {
 //     cors: {
 //         origin: "*",
@@ -275,24 +321,14 @@ wss.on('connection', (ws, req) => {
 // Event handlers
 async function handleCreateEvent(eventData, ws, userId) {
     try {
-        console.log(typeof (eventData.start_date));
-
-        console.log(eventData.start_date);
+        console.log('Creating event with data:', eventData);
+        
         function parseDate(input) {
             // If already a Date object, return it
             if (input instanceof Date) return input;
+            if (!input) return null;
 
-            // Try ISO format (YYYY-MM-DD)
-            const isoMatch = input.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-            if (isoMatch) {
-                return new Date(Date.UTC(
-                    parseInt(isoMatch[3], 10),
-                    parseInt(isoMatch[2], 10) - 1, // Months are 0-indexed
-                    parseInt(isoMatch[1], 10)
-                ));
-            }
-
-            // Fallback to Date constructor
+            // Try ISO format
             const date = new Date(input);
             if (isNaN(date.getTime())) throw new Error(`Invalid date: ${input}`);
             return date;
@@ -301,28 +337,31 @@ async function handleCreateEvent(eventData, ws, userId) {
         const newEvent = new Event({
             title: eventData.title,
             start_date: parseDate(eventData.start_date),
-            end_date: parseDate(eventData.end_date),
+            end_date: eventData.end_date ? parseDate(eventData.end_date) : null,
             description: eventData.description,
             userId: userId,
-            createdBy: userId
+            createdBy: userId,
+            eventMode: eventData.eventMode || 'all-day',
+            startTime: eventData.startTime ? parseDate(eventData.startTime) : null,
+            endTime: eventData.endTime ? parseDate(eventData.endTime) : null,
+            cropType: eventData.cropType,
+            cropVariety: eventData.cropVariety,
+            activityType: eventData.activityType,
+            fieldLocation: eventData.fieldLocation,
+            equipmentNeeded: eventData.equipmentNeeded || [],
+            reminders: eventData.reminders || [],
+            reminderSettings: eventData.reminderSettings,
         });
         const savedEvent = await newEvent.save();
 
         // Broadcast to all clients
         await broadcastEvents();
 
-        // Send success response to the creator
+        // Send success response to the creator with all fields
         ws.send(JSON.stringify({
             type: 'eventCreated',
             success: true,
-            event: {
-                id: savedEvent._id,
-                title: savedEvent.title,
-                start_date: formatDate(savedEvent.start_date),
-                end_date: savedEvent.end_date ? formatDate(savedEvent.end_date) : null,
-                description: savedEvent.description,
-                userId: savedEvent.userId
-            }
+            event: formatEventForClient(savedEvent)
         }));
     } catch (err) {
         console.error('Error creating event:', err);
@@ -342,16 +381,33 @@ async function handleUpdateEvent(eventId, updates, ws, userId) {
             throw new Error('Event not found or not authorized');
         }
 
-        // Prepare updates
+        function parseDate(input) {
+            if (input instanceof Date) return input;
+            if (!input) return null;
+            const date = new Date(input);
+            if (isNaN(date.getTime())) throw new Error(`Invalid date: ${input}`);
+            return date;
+        }
+
+        // Prepare updates with all fields
         const updateData = {
             updatedAt: new Date(),
-            updatedBy: userId
         };
 
-        if (updates.title) updateData.title = updates.title;
-        if (updates.start_date) updateData.start_date = new Date(updates.start_date);
-        if (updates.end_date) updateData.end_date = updates.end_date ? new Date(updates.end_date) : null;
-        if (updates.description) updateData.description = updates.description;
+        if (updates.title !== undefined) updateData.title = updates.title;
+        if (updates.start_date !== undefined) updateData.start_date = parseDate(updates.start_date);
+        if (updates.end_date !== undefined) updateData.end_date = updates.end_date ? parseDate(updates.end_date) : null;
+        if (updates.description !== undefined) updateData.description = updates.description;
+        if (updates.eventMode !== undefined) updateData.eventMode = updates.eventMode;
+        if (updates.startTime !== undefined) updateData.startTime = updates.startTime ? parseDate(updates.startTime) : null;
+        if (updates.endTime !== undefined) updateData.endTime = updates.endTime ? parseDate(updates.endTime) : null;
+        if (updates.cropType !== undefined) updateData.cropType = updates.cropType;
+        if (updates.cropVariety !== undefined) updateData.cropVariety = updates.cropVariety;
+        if (updates.activityType !== undefined) updateData.activityType = updates.activityType;
+        if (updates.fieldLocation !== undefined) updateData.fieldLocation = updates.fieldLocation;
+        if (updates.equipmentNeeded !== undefined) updateData.equipmentNeeded = updates.equipmentNeeded;
+        if (updates.reminders !== undefined) updateData.reminders = updates.reminders;
+        if (updates.reminderSettings !== undefined) updateData.reminderSettings = updates.reminderSettings;
 
         const updatedEvent = await Event.findByIdAndUpdate(
             eventId,
@@ -362,18 +418,11 @@ async function handleUpdateEvent(eventId, updates, ws, userId) {
         // Broadcast to all clients
         await broadcastEvents();
 
-        // Send success response to the updater
+        // Send success response to the updater with all fields
         ws.send(JSON.stringify({
             type: 'eventUpdated',
             success: true,
-            event: {
-                id: updatedEvent._id,
-                title: updatedEvent.title,
-                start_date: formatDate(updatedEvent.start_date),
-                end_date: updatedEvent.end_date ? formatDate(updatedEvent.end_date) : null,
-                description: updatedEvent.description,
-                userId: updatedEvent.userId
-            }
+            event: formatEventForClient(updatedEvent)
         }));
     } catch (err) {
         console.error('Error updating event:', err);
@@ -415,20 +464,49 @@ async function handleDeleteEvent(eventId, ws, userId) {
 }
 
 
+// Helper function to format event for client with all fields
+function formatDateISO(date) {
+    if (!date) return null;
+    return new Date(date).toISOString();
+}
+
+function formatEventForClient(event) {
+    return {
+        id: event._id.toString(),
+        title: event.title,
+        start_date: formatDateISO(event.start_date),
+        end_date: event.end_date ? formatDateISO(event.end_date) : null,
+        description: event.description,
+        userId: event.userId ? event.userId.toString() : null,
+        createdBy: event.createdBy ? event.createdBy.toString() : null,
+        eventMode: event.eventMode || 'all-day',
+        startTime: event.startTime ? formatDateISO(event.startTime) : null,
+        endTime: event.endTime ? formatDateISO(event.endTime) : null,
+        cropType: event.cropType,
+        cropVariety: event.cropVariety,
+        activityType: event.activityType,
+        fieldLocation: event.fieldLocation,
+        equipmentNeeded: event.equipmentNeeded || [],
+        reminders: (event.reminders || []).map(reminder => ({
+            reminderTime: formatDateISO(reminder.reminderTime),
+            reminderType: reminder.reminderType,
+            reminderValue: reminder.reminderValue,
+            isNotified: reminder.isNotified || false,
+            notificationId: reminder.notificationId || null
+        })),
+        reminderSettings: event.reminderSettings || null,
+        createdAt: event.createdAt ? formatDateISO(event.createdAt) : null,
+        updatedAt: event.updatedAt ? formatDateISO(event.updatedAt) : null,
+        isDeleted: event.isDeleted || false,
+    };
+}
+
 async function broadcastEvents() {
     try {
-        const events = await Event.find().sort({ start_date: 1 });
+        const events = await Event.find({ isDeleted: { $ne: true } }).sort({ start_date: 1 });
         const message = JSON.stringify({
             type: 'events',
-            data: events.map(event => ({
-                id: event._id,
-                title: event.title,
-                start_date: formatDate(event.start_date),
-                end_date: event.end_date ? formatDate(event.end_date) : null,
-                description: event.description,
-                userId: event.userId,
-                createdBy: event.createdBy
-            }))
+            data: events.map(event => formatEventForClient(event))
         });
 
         clients.forEach((clientData, client) => {
@@ -444,18 +522,10 @@ async function broadcastEvents() {
 // Send events to a single client
 async function sendEventsToClient(ws) {
     try {
-        const events = await Event.find().sort({ start_date: 1 });
+        const events = await Event.find({ isDeleted: { $ne: true } }).sort({ start_date: 1 });
         ws.send(JSON.stringify({
             type: 'events',
-            data: events.map(event => ({
-                id: event._id,
-                title: event.title,
-                start_date: formatDate(event.start_date),
-                end_date: event.end_date ? formatDate(event.end_date) : null,
-                description: event.description,
-                userId: event.userId,
-                createdBy: event.createdBy
-            }))
+            data: events.map(event => formatEventForClient(event))
         }));
     } catch (err) {
         console.error('Error sending events to client:', err);
@@ -575,10 +645,40 @@ mongoose.connect(process.env.MONGODB_URI).then(() => {
     });
 }).then(calendarDb => {
     console.log("Connected to calendar database");
+    // Initialize irrigation scheduler service
+    const irrigationSchedulerService = require('./services/irrigationSchedulerService');
+    
+    // Start cron job to check scheduled irrigations every minute
+    setInterval(async () => {
+        try {
+            await irrigationSchedulerService.checkScheduledIrrigations();
+        } catch (error) {
+            console.error('[IrrigationScheduler] Cron job error:', error);
+        }
+    }, 60000); // Check every 60 seconds (1 minute)
+    console.log('✅ Irrigation scheduler started (checking every minute)');
+
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, '0.0.0.0', () => {
+    server.listen(PORT, '0.0.0.0', async () => {
         console.log(`Server running on http://localhost:${PORT}`);
         console.log(`WebSocket server running on ws://localhost:${PORT}`);
+        
+        // Initialize camera detection on server start
+        try {
+            const cameraDetectionService = require('./services/cameraDetectionService');
+            const cameras = await cameraDetectionService.detectCameras();
+            console.log(`\n📷 Camera Detection: Found ${cameras.length} USB camera(s)`);
+            if (cameras.length > 0) {
+                cameras.forEach((cam, idx) => {
+                    console.log(`   ${idx + 1}. ${cam.name} (ID: ${cam.id})`);
+                });
+            } else {
+                console.log('   No cameras detected. Make sure cameras are connected and FFmpeg is installed.');
+            }
+        } catch (error) {
+            console.log(`\n⚠️  Camera Detection: ${error.message}`);
+            console.log('   Camera features will not be available until FFmpeg is installed.');
+        }
     });
 }).catch(err => {
     console.log(err);
