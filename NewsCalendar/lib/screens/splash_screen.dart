@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
+import '../wrapper.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -12,10 +15,26 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Simulate loading or initialization
-    Timer(const Duration(seconds: 2), () {
-      Navigator.of(context).pushReplacementNamed('/home');
-    });
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // Check authentication status first
+    try {
+      await Provider.of<AuthService>(context, listen: false).checkAuthStatus();
+    } catch (e) {
+      debugPrint('Error checking auth status: $e');
+    }
+
+    // Wait for splash screen display (minimum 2 seconds)
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) {
+      // Navigate to Wrapper which handles authentication routing
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const Wrapper()),
+      );
+    }
   }
 
   @override

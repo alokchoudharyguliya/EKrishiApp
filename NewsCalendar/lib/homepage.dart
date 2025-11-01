@@ -14,6 +14,7 @@ import './screens/ai_crop_assistance_screen.dart';
 import './screens/equipment_markeplace_screen.dart';
 import './screens/login_screen.dart';
 import './screens/chatbot_screen.dart';
+import './screens/supplies_marketplace_screen.dart';
 
 class Homepage extends StatefulWidget {
   final String? token;
@@ -332,6 +333,19 @@ class _HomepageState extends State<Homepage> {
                   },
                 ),
                 ListTile(
+                  leading: const Icon(Icons.shopping_bag),
+                  title: const Text('Supplies Marketplace'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SuppliesMarketplaceScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.settings),
                   title: const Text('Settings'),
                   onTap: () {
@@ -382,10 +396,11 @@ class _HomepageState extends State<Homepage> {
                             padding: const EdgeInsets.all(18.0),
                             child: GridView.count(
                               shrinkWrap: true,
-                              crossAxisCount: 4,
+                              crossAxisCount: 3,
                               mainAxisSpacing: 15,
                               crossAxisSpacing: 15,
                               physics: NeverScrollableScrollPhysics(),
+                              childAspectRatio: 1.0,
                               children: [
                                 OutlinedButton(
                                   style: OutlinedButton.styleFrom(
@@ -412,6 +427,33 @@ class _HomepageState extends State<Homepage> {
                                     Icons.agriculture,
                                     size: 20,
                                     color: Colors.green,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.orange,
+                                      width: 1.5,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (_) =>
+                                                const SuppliesMarketplaceScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: Icon(
+                                    Icons.shopping_bag,
+                                    size: 20,
+                                    color: Colors.orange,
                                   ),
                                 ),
                                 OutlinedButton(

@@ -381,6 +381,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     eventModel.Event updatedEvent,
     String eventId,
   ) async {
+    // Check if channel is null, closed, or in invalid state
     if (_channel == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -388,6 +389,18 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           duration: Duration(seconds: 2),
         ),
       );
+      _connectToWebSocket();
+      return;
+    }
+
+    if (_channel!.closeCode != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connection lost. Reconnecting...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      _connectToWebSocket();
       return;
     }
 
@@ -402,29 +415,36 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       // COMMENTED OUT: Hive box storage - now using WebSocket-only event fetching
       // _eventsBox.put(updatedEvent.id, updatedEvent);
 
-      // Send via WebSocket
-      _channel!.sink.add(
-        jsonEncode({
-          'action': 'updateEvent',
-          'eventId': eventId,
-          'updates': {
-            'title': updatedEvent.title,
-            'start_date': updatedEvent.startDate.toIso8601String(),
-            'end_date': updatedEvent.endDate?.toIso8601String(),
-            'description': updatedEvent.description,
-            'eventMode': updatedEvent.eventMode,
-            'startTime': updatedEvent.startTime?.toIso8601String(),
-            'endTime': updatedEvent.endTime?.toIso8601String(),
-            'cropType': updatedEvent.cropType,
-            'cropVariety': updatedEvent.cropVariety,
-            'activityType': updatedEvent.activityType,
-            'fieldLocation': updatedEvent.fieldLocation,
-            'equipmentNeeded': updatedEvent.equipmentNeeded,
-            'reminders': updatedEvent.reminders.map((r) => r.toJson()).toList(),
-            'reminderSettings': updatedEvent.reminderSettings,
-          },
-        }),
-      );
+      // Send via WebSocket - with error handling
+      try {
+        _channel!.sink.add(
+          jsonEncode({
+            'action': 'updateEvent',
+            'eventId': eventId,
+            'updates': {
+              'title': updatedEvent.title,
+              'start_date': updatedEvent.startDate.toIso8601String(),
+              'end_date': updatedEvent.endDate?.toIso8601String(),
+              'description': updatedEvent.description,
+              'eventMode': updatedEvent.eventMode,
+              'startTime': updatedEvent.startTime?.toIso8601String(),
+              'endTime': updatedEvent.endTime?.toIso8601String(),
+              'cropType': updatedEvent.cropType,
+              'cropVariety': updatedEvent.cropVariety,
+              'activityType': updatedEvent.activityType,
+              'fieldLocation': updatedEvent.fieldLocation,
+              'equipmentNeeded': updatedEvent.equipmentNeeded,
+              'reminders':
+                  updatedEvent.reminders.map((r) => r.toJson()).toList(),
+              'reminderSettings': updatedEvent.reminderSettings,
+            },
+          }),
+        );
+      } catch (e) {
+        print('Error sending update via WebSocket: $e');
+        _connectToWebSocket();
+        throw Exception('WebSocket connection lost. Please try again.');
+      }
 
       // Reschedule notifications for updated event
       await _notificationService.cancelEventReminders(eventId);
@@ -442,11 +462,52 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   Future<void> _createEventViaWebSocket(Map<String, dynamic> eventData) async {
+    // Check if channel is null, closed, or in invalid state
     if (_channel == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Not connected. Please check your connection.'),
           duration: Duration(seconds: 2),
+        ),
+      );
+      // Try to reconnect
+      _connectToWebSocket();
+      return;
+    }
+
+    // Check if channel is closed
+    if (_channel!.closeCode != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connection lost. Reconnecting...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      // Reconnect
+      _connectToWebSocket();
+      return;
+    }
+
+    // Validate userId before sending
+    if (eventData['userId'] == null || eventData['userId'].toString().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('User authentication error. Please log in again.'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validate title
+    if (eventData['title'] == null ||
+        eventData['title'].toString().trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Event title is required.'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.red,
         ),
       );
       return;
@@ -462,6 +523,46 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
       // Create temporary local event for optimistic update
       final tempId = _uuid.v4();
+
+      // Parse startTime and endTime from ISO strings to DateTime objects
+      // ISO strings from backend are in UTC, parse and convert to local time for display
+      DateTime? parsedStartTime;
+      DateTime? parsedEndTime;
+
+      if (eventData['startTime'] != null) {
+        if (eventData['startTime'] is String) {
+          try {
+            // Parse ISO string (UTC) and convert to local time
+            final utcTime = DateTime.parse(eventData['startTime'] as String);
+            parsedStartTime = utcTime.toLocal();
+          } catch (e) {
+            print('Error parsing startTime: $e');
+            parsedStartTime = null;
+          }
+        } else if (eventData['startTime'] is DateTime) {
+          // If already DateTime, ensure it's in local time
+          final dt = eventData['startTime'] as DateTime;
+          parsedStartTime = dt.isUtc ? dt.toLocal() : dt;
+        }
+      }
+
+      if (eventData['endTime'] != null) {
+        if (eventData['endTime'] is String) {
+          try {
+            // Parse ISO string (UTC) and convert to local time
+            final utcTime = DateTime.parse(eventData['endTime'] as String);
+            parsedEndTime = utcTime.toLocal();
+          } catch (e) {
+            print('Error parsing endTime: $e');
+            parsedEndTime = null;
+          }
+        } else if (eventData['endTime'] is DateTime) {
+          // If already DateTime, ensure it's in local time
+          final dt = eventData['endTime'] as DateTime;
+          parsedEndTime = dt.isUtc ? dt.toLocal() : dt;
+        }
+      }
+
       final newEvent = eventModel.Event.create(
         id: tempId,
         title: eventData['title'] ?? '',
@@ -470,7 +571,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
             eventData['start_date'] is DateTime
                 ? eventData['start_date']
                 : DateFormat("dd-MM-yyyy").parse(eventData['start_date']),
-        userId: _currentUserId ?? '',
+        userId: eventData['userId']?.toString() ?? _currentUserId ?? '',
         endDate:
             eventData['end_date'] != null
                 ? (eventData['end_date'] is DateTime
@@ -478,8 +579,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                     : DateFormat("dd-MM-yyyy").parse(eventData['end_date']))
                 : null,
         eventMode: eventData['eventMode'] ?? 'all-day',
-        startTime: eventData['startTime'],
-        endTime: eventData['endTime'],
+        startTime: parsedStartTime,
+        endTime: parsedEndTime,
         cropType: eventData['cropType'],
         cropVariety: eventData['cropVariety'],
         activityType: eventData['activityType'],
@@ -517,8 +618,22 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                 : null,
         'description': eventData['description'],
         'eventMode': eventData['eventMode'] ?? 'all-day',
-        'startTime': eventData['startTime']?.toIso8601String(),
-        'endTime': eventData['endTime']?.toIso8601String(),
+        'startTime':
+            eventData['startTime'] != null
+                ? (eventData['startTime'] is String
+                    ? eventData['startTime']
+                    : (eventData['startTime'] is DateTime
+                        ? (eventData['startTime'] as DateTime).toIso8601String()
+                        : null))
+                : null,
+        'endTime':
+            eventData['endTime'] != null
+                ? (eventData['endTime'] is String
+                    ? eventData['endTime']
+                    : (eventData['endTime'] is DateTime
+                        ? (eventData['endTime'] as DateTime).toIso8601String()
+                        : null))
+                : null,
         'cropType': eventData['cropType'],
         'cropVariety': eventData['cropVariety'],
         'activityType': eventData['activityType'],
@@ -528,10 +643,23 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         'reminderSettings': eventData['reminderSettings'],
       };
 
-      // Send via WebSocket
-      _channel!.sink.add(
-        jsonEncode({'action': 'createEvent', 'event': eventPayload}),
-      );
+      // Send via WebSocket - check if channel is still open
+      if (_channel != null && _channel!.closeCode == null) {
+        try {
+          _channel!.sink.add(
+            jsonEncode({'action': 'createEvent', 'event': eventPayload}),
+          );
+        } catch (e) {
+          // Channel might be closed, reconnect and retry
+          print('Error sending via WebSocket: $e');
+          _connectToWebSocket();
+          throw Exception('WebSocket connection lost. Please try again.');
+        }
+      } else {
+        throw Exception(
+          'WebSocket not connected. Please check your connection.',
+        );
+      }
 
       // Schedule notifications for the new event
       if (newEvent.reminders.isNotEmpty) {
@@ -716,10 +844,16 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           }
         });
       } else if (responseData["type"] == "error") {
+        final errorMsg =
+            responseData["error"] ??
+            responseData["message"] ??
+            'Error occurred';
+        print('WebSocket error received: $errorMsg');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(responseData["message"] ?? 'Error occurred'),
-            duration: Duration(seconds: 2),
+            content: Text('Error: $errorMsg'),
+            duration: Duration(seconds: 4),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -737,6 +871,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     String eventId,
     eventModel.Event event,
   ) async {
+    // Check if channel is null, closed, or in invalid state
     if (_channel == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -744,6 +879,18 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           duration: Duration(seconds: 2),
         ),
       );
+      _connectToWebSocket();
+      return;
+    }
+
+    if (_channel!.closeCode != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connection lost. Reconnecting...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      _connectToWebSocket();
       return;
     }
 
@@ -765,10 +912,16 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
       // Cancel notifications for deleted event
       await _notificationService.cancelEventReminders(eventId);
 
-      // Send via WebSocket
-      _channel!.sink.add(
-        jsonEncode({'action': 'deleteEvent', 'eventId': eventId}),
-      );
+      // Send via WebSocket - with error handling
+      try {
+        _channel!.sink.add(
+          jsonEncode({'action': 'deleteEvent', 'eventId': eventId}),
+        );
+      } catch (e) {
+        print('Error sending delete via WebSocket: $e');
+        _connectToWebSocket();
+        throw Exception('WebSocket connection lost. Please try again.');
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -782,7 +935,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   void _removeOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    _channel?.sink.close();
+    // DO NOT close WebSocket channel here - it's still needed for event operations
     _animationController?.dispose();
     _animationController = null;
   }
@@ -1035,13 +1188,27 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                 Theme.of(context).colorScheme.primary,
                             onPressed: () {
                               _removeOverlay();
-                              print(
-                                "_currentUserId_currentUserId_currentUserId",
-                              );
-                              print(_currentUserId);
+                              // Ensure userId is available before creating event
+                              if (_currentUserId == null ||
+                                  _currentUserId!.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'User authentication error. Please log in again.',
+                                    ),
+                                    duration: Duration(seconds: 3),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                return;
+                              }
+
                               final newEvent = {
                                 "userId": _currentUserId,
-                                "title": _newEventTitle,
+                                "title":
+                                    _newEventTitle.isNotEmpty
+                                        ? _newEventTitle
+                                        : 'New Event',
                                 "start_date": DateFormat(
                                   "dd-MM-yyyy",
                                 ).format(selectedDay),

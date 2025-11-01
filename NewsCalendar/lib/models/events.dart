@@ -34,8 +34,10 @@ class Reminder {
   }
 
   factory Reminder.fromJson(Map<String, dynamic> json) {
+    // Parse ISO string (UTC) and convert to local time for display
+    final utcTime = DateTime.parse(json['reminderTime']);
     return Reminder(
-      reminderTime: DateTime.parse(json['reminderTime']),
+      reminderTime: utcTime.isUtc ? utcTime.toLocal() : utcTime,
       reminderType: json['reminderType'],
       reminderValue: json['reminderValue'],
       isNotified: json['isNotified'] ?? false,
@@ -72,17 +74,17 @@ class Event {
   final bool isDeleted;
   @HiveField(12)
   String? changeType;
-  
+
   // Event mode: 'all-day' or 'timed'
   @HiveField(13)
   final String eventMode;
-  
+
   // Time fields (for timed events)
   @HiveField(14)
   final DateTime? startTime;
   @HiveField(15)
   final DateTime? endTime;
-  
+
   // Farmer-specific fields
   @HiveField(16)
   final String? cropType;
@@ -94,7 +96,7 @@ class Event {
   final String? fieldLocation;
   @HiveField(20)
   final List<String> equipmentNeeded;
-  
+
   // Reminder system
   @HiveField(21)
   final List<Reminder> reminders;
@@ -182,18 +184,26 @@ class Event {
         isSynced: json['isSynced'] ?? true,
         version: json['version'] ?? 0,
         eventMode: json['eventMode'] ?? 'all-day',
-        startTime: json['startTime'] != null ? _parseDateTime(json['startTime']) : null,
-        endTime: json['endTime'] != null ? _parseDateTime(json['endTime']) : null,
+        startTime:
+            json['startTime'] != null
+                ? _parseDateTime(json['startTime'])
+                : null,
+        endTime:
+            json['endTime'] != null ? _parseDateTime(json['endTime']) : null,
         cropType: json['cropType'],
         cropVariety: json['cropVariety'],
         activityType: json['activityType'],
         fieldLocation: json['fieldLocation'],
-        equipmentNeeded: json['equipmentNeeded'] != null 
-            ? List<String>.from(json['equipmentNeeded'])
-            : [],
-        reminders: json['reminders'] != null
-            ? (json['reminders'] as List).map((r) => Reminder.fromJson(r)).toList()
-            : [],
+        equipmentNeeded:
+            json['equipmentNeeded'] != null
+                ? List<String>.from(json['equipmentNeeded'])
+                : [],
+        reminders:
+            json['reminders'] != null
+                ? (json['reminders'] as List)
+                    .map((r) => Reminder.fromJson(r))
+                    .toList()
+                : [],
         reminderSettings: json['reminderSettings'],
       );
     } catch (e) {
@@ -202,12 +212,18 @@ class Event {
   }
 
   static DateTime _parseDateTime(dynamic date) {
-    if (date is DateTime) return date;
+    if (date is DateTime) {
+      // If already DateTime, convert UTC to local if needed
+      return date.isUtc ? date.toLocal() : date;
+    }
     if (date == null) return DateTime.now();
 
     try {
       if (date is String) {
-        return DateTime.parse(date);
+        // Parse ISO string - if it has 'Z' or timezone, it's UTC
+        final parsed = DateTime.parse(date);
+        // Convert UTC to local time for display
+        return parsed.isUtc ? parsed.toLocal() : parsed;
       }
       return DateTime.now();
     } catch (e) {

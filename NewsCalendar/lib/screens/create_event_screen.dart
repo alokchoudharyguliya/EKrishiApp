@@ -206,6 +206,34 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return;
     }
 
+    // Validate title (backend requires non-empty title)
+    final title = _titleController.text.trim();
+    if (title.isEmpty &&
+        (widget.event['title'] == null ||
+            widget.event['title'].toString().trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Title is required. Please enter an event title.'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validate userId
+    if (widget.event['userId'] == null ||
+        widget.event['userId'].toString().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User authentication error. Please log in again.'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     // Parse dates from event
     DateTime startDate;
     DateTime? endDate;
@@ -230,11 +258,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     // Combine date and time for timed events
+    // Create DateTime in local timezone - user selected time is local time
     DateTime? startTime;
     DateTime? endTime;
 
     if (_eventMode == 'timed') {
       if (_startTime != null) {
+        // Create local DateTime - this preserves the user's selected time as local
         startTime = DateTime(
           startDate.year,
           startDate.month,
@@ -245,6 +275,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
       if (_endTime != null) {
         final endDateTime = endDate ?? startDate;
+        // Create local DateTime - this preserves the user's selected time as local
         endTime = DateTime(
           endDateTime.year,
           endDateTime.month,
@@ -312,9 +343,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     final updates = {
       "title":
-          _titleController.text.isNotEmpty
-              ? _titleController.text
-              : widget.event['title'],
+          title.isNotEmpty
+              ? title
+              : (widget.event['title']?.toString().trim() ?? 'Untitled Event'),
       "description":
           _descriptionController.text.isNotEmpty
               ? _descriptionController.text

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:newscalendar/utils/imports.dart';
 import 'package:http/http.dart' as http;
 import 'package:newscalendar/screens/irrigation_schedule_screen.dart';
+import 'package:newscalendar/services/pi_communication_service.dart';
 
 class IrrigationScreen extends StatefulWidget {
   const IrrigationScreen({Key? key}) : super(key: key);
@@ -41,10 +42,14 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
   String? _nextScheduledTime;
   bool _isLoadingNextScheduled = false;
 
+  // Pi Communication Service
+  final PiCommunicationService _piService = PiCommunicationService();
+
   @override
   void initState() {
     super.initState();
-    _checkDeviceRegistration();
+    // Refresh all data when screen is first loaded
+    _refreshAllData();
   }
 
   @override
@@ -53,12 +58,39 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
     _piUrlController.dispose();
     _deviceNameController.dispose();
     _locationController.dispose();
+    _piService.dispose();
     super.dispose();
   }
 
-  /// Check if device is registered by calling backend API
-  Future<void> _checkDeviceRegistration() async {
+  /// Comprehensive refresh method that fetches all data
+  /// Called on screen entry and refresh button press
+  Future<void> _refreshAllData() async {
+    // Reset loading state
     setState(() => _isLoading = true);
+    
+    // Reset all data states to ensure fresh fetch
+    setState(() {
+      _pumpOn = false;
+      _deviceConnected = false;
+      _connectionErrorMessage = null;
+      _sensorData = null;
+      _sensorErrorMessage = null;
+      _pumpTimings = [];
+      _pumpTimingsErrorMessage = null;
+      _nextScheduledTime = null;
+    });
+    
+    // Check device registration which will trigger all data fetches
+    await _checkDeviceRegistration();
+  }
+
+  /// Check if device is registered by calling backend API
+  /// This method will also trigger fetching of all related data
+  Future<void> _checkDeviceRegistration() async {
+    // Don't reset loading if already set by _refreshAllData
+    if (!_isLoading) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
@@ -106,6 +138,10 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
               'irrigation_device_id',
               data['data']['deviceId'],
             );
+            // Initialize Pi communication service
+            if (data['data']['piUrl'] != null && data['data']['deviceId'] != null) {
+              await _piService.initialize(data['data']['piUrl'], data['data']['deviceId']);
+            }
             // Fetch device status (connection and pump state)
             await _fetchDeviceStatus(data['data']['deviceId']);
             // Fetch sensor data
@@ -154,6 +190,10 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
               'irrigation_device_id',
               data['data']['deviceId'],
             );
+            // Initialize Pi communication service
+            if (data['data']['piUrl'] != null && data['data']['deviceId'] != null) {
+              await _piService.initialize(data['data']['piUrl'], data['data']['deviceId']);
+            }
             // Fetch device status (connection and pump state)
             await _fetchDeviceStatus(data['data']['deviceId']);
             // Fetch sensor data
@@ -249,6 +289,11 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
             _deviceData = responseData['data'];
           });
 
+          // Initialize Pi communication service
+          if (responseData['data']['piUrl'] != null && responseData['data']['deviceId'] != null) {
+            await _piService.initialize(responseData['data']['piUrl'], responseData['data']['deviceId']);
+          }
+
           // Fetch device status (connection and pump state)
           await _fetchDeviceStatus(responseData['data']['deviceId']);
           // Fetch sensor data
@@ -301,6 +346,46 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
         return;
       }
 
+      // Try using Pi communication service first (direct or backend)
+      try {
+        final response = await _piService.getStatus(token: token);
+        
+        if (response.success && response.data != null) {
+          // Handle response format (could be from direct or backend)
+          final data = response.data!;
+          
+          // Check if this is backend format (has connectionStatus)
+          if (data.containsKey('connectionStatus')) {
+            // Backend format
+            final connectionStatus = data['connectionStatus'] ?? {};
+            final currentState = data['currentState'] ?? {};
+            
+            setState(() {
+              _deviceConnected = connectionStatus['isConnected'] ?? false;
+              _pumpOn = currentState['pumpState'] ?? false;
+              _connectionErrorMessage =
+                  _deviceConnected
+                      ? null
+                      : 'Raspberry Pi device is not connected. Please ensure the device is online.';
+            });
+          } else if (data.containsKey('pumpState')) {
+            // Direct Pi format
+            final pumpState = data['pumpState'] ?? false;
+            
+            setState(() {
+              _deviceConnected = true; // Direct connection means connected
+              _pumpOn = pumpState;
+              _connectionErrorMessage = null;
+            });
+          }
+          return;
+        }
+      } catch (e) {
+        debugPrint('Error using Pi service for status: $e');
+        // Fall through to backend HTTP fallback
+      }
+
+      // Fallback to direct backend HTTP call
       final response = await http
           .get(
             Uri.parse('$BASE_URL/api/irrigation/status?deviceId=$deviceId'),
@@ -363,6 +448,49 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
         return;
       }
 
+      // Try using Pi communication service first (direct or backend)
+      try {
+        final piResponse = await _piService.readSensor(sensorType, token: token);
+        
+        if (piResponse.success && piResponse.data != null) {
+          final data = piResponse.data!;
+          
+          // Handle response format (could be from direct or backend)
+          if (data.containsKey('sensorType') && data.containsKey('value')) {
+            // Backend format: {sensorType, value, unit, timestamp, deviceId}
+            if (mounted) {
+              setState(() {
+                _sensorData = data;
+                _isLoadingSensor = false;
+                _sensorErrorMessage = null;
+              });
+            }
+            return;
+          } else if (data.containsKey('sensorData')) {
+            // Direct Pi format: {sensorData: {value, unit}}
+            final sensorData = data['sensorData'];
+            if (mounted) {
+              setState(() {
+                _sensorData = {
+                  'sensorType': sensorType,
+                  'value': sensorData['value'],
+                  'unit': sensorData['unit'] ?? 'C',
+                  'deviceId': deviceId,
+                  'timestamp': DateTime.now().toIso8601String(),
+                };
+                _isLoadingSensor = false;
+                _sensorErrorMessage = null;
+              });
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error using Pi service for sensor: $e');
+        // Fall through to backend HTTP fallback
+      }
+
+      // Fallback to direct backend HTTP call
       final response = await http
           .get(
             Uri.parse(
@@ -647,41 +775,32 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
         throw Exception('Device ID not found');
       }
 
-      // Send toggle request to backend
-      final response = await http
-          .post(
-            Uri.parse('$BASE_URL/api/irrigation/pump/toggle'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: json.encode({'deviceId': deviceId, 'state': newState}),
-          )
-          .timeout(const Duration(seconds: 10));
+      // Use Pi communication service (tries direct, falls back to backend)
+      final response = await _piService.togglePump(newState, token: token);
 
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        // Success - update state from backend response
+      if (response.success && response.data != null) {
+        // Success - refresh status to get actual pump state from Pi
         setState(() {
-          _pumpOn = responseData['data']['state'] ?? newState;
           _isTogglingPump = false;
         });
+        
+        // Refresh status to get actual pump state from Pi
+        await _fetchDeviceStatus(deviceId);
 
         if (mounted) {
+          final message = response.data!['message'] ?? 
+              (response.data!['state'] == true ? 'Pump switched ON' : 'Pump switched OFF');
+          final connectionType = response.connectionType == 'direct' ? ' (Direct)' : ' (Backend)';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                responseData['message'] ??
-                    (_pumpOn ? 'Pump switched ON' : 'Pump switched OFF'),
-              ),
+              content: Text('$message$connectionType'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
           );
         }
       } else {
-        throw Exception(responseData['message'] ?? 'Failed to toggle pump');
+        throw Exception(response.error ?? 'Failed to toggle pump');
       }
     } catch (e) {
       // Revert to previous state on failure
@@ -727,18 +846,10 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
                   IconButton(
                     icon: const Icon(Icons.refresh),
                     onPressed: () async {
-                      await _checkDeviceRegistration();
-                      if (_deviceData != null &&
-                          _deviceData!['deviceId'] != null) {
-                        await _fetchDeviceStatus(_deviceData!['deviceId']);
-                        await _fetchSensorData(_deviceData!['deviceId']);
-                        await _fetchPumpTimings(_deviceData!['deviceId']);
-                        await _fetchNextScheduledIrrigation(
-                          _deviceData!['deviceId'],
-                        );
-                      }
+                      // Use comprehensive refresh method
+                      await _refreshAllData();
                     },
-                    tooltip: 'Refresh',
+                    tooltip: 'Refresh All Data',
                   ),
                 ]
                 : null,
