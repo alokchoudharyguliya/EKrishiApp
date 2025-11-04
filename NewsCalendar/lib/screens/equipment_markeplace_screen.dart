@@ -17,7 +17,7 @@ class EquipmentMarketplaceScreen extends StatefulWidget {
 }
 
 class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
   String? _errorMessage;
@@ -25,16 +25,46 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
   final List<Equipment> _myTools = [];
   String? _currentUserId;
 
+  // Animation controllers for card entrance animations
+  late AnimationController _myToolsAnimationController;
+  late AnimationController _browseToolsAnimationController;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    
+    // Initialize animation controllers
+    _myToolsAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _browseToolsAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    // Listen to tab changes to animate appropriately
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        if (_tabController.index == 0) {
+          _myToolsAnimationController.reset();
+          _myToolsAnimationController.forward();
+        } else {
+          _browseToolsAnimationController.reset();
+          _browseToolsAnimationController.forward();
+        }
+      }
+    });
+
     _loadCurrentUser().then((_) => _fetchEquipment());
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _myToolsAnimationController.dispose();
+    _browseToolsAnimationController.dispose();
     super.dispose();
   }
 
@@ -83,6 +113,9 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
           _isLoading = false;
         });
         _refreshMyTools();
+        // Animate cards in after data loads
+        _myToolsAnimationController.forward();
+        _browseToolsAnimationController.forward();
       } else {
         throw Exception('Failed to load equipment');
       }
@@ -933,7 +966,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Equipment Marketplace'),
-        backgroundColor: Colors.green[700],
+        backgroundColor: Color(0xFF2D5016),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [Tab(text: 'My Tools'), Tab(text: 'Browse Tools')],
@@ -944,7 +977,7 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
               ? FloatingActionButton(
                 onPressed: () => _showAddToolDialog(),
                 child: const Icon(Icons.add),
-                backgroundColor: Colors.green,
+                backgroundColor: Color(0xFF4CAF50),
               )
               : null,
       body: TabBarView(
@@ -984,365 +1017,531 @@ class _EquipmentMarketplaceScreenState extends State<EquipmentMarketplaceScreen>
                         ),
                       ),
                     )
-                    : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(8),
-                      itemCount: _myTools.length,
-                      itemBuilder: (context, index) {
-                        final tool = _myTools[index];
-                        return Card(
-                          elevation: 3,
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(12),
-                                ),
-                                child: Image.network(
-                                  tool.imageUrl.isNotEmpty ? tool.imageUrl : '',
-                                  height: 180,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder:
-                                      (context, error, stackTrace) => Container(
-                                        height: 180,
-                                        color: Colors.grey[300],
-                                        child: const Center(
-                                          child: Icon(Icons.image, size: 50),
-                                        ),
-                                      ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            tool.name,
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                tool.isAvailable
-                                                    ? Colors.green
-                                                    : Colors.red,
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            tool.isAvailable
-                                                ? 'Available'
-                                                : 'Unavailable',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      tool.description,
-                                      style: TextStyle(color: Colors.grey[700]),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.price_change,
-                                          size: 16,
-                                          color: Colors.green,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '₹${tool.price}',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on,
-                                          size: 16,
-                                          color: Colors.grey,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(tool.location),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        // Edit button
-                                        IconButton(
-                                          icon: const Icon(Icons.edit),
-                                          color: Colors.blue,
-                                          onPressed:
-                                              () => _showAddToolDialog(
-                                                tool: tool,
-                                              ),
-                                        ),
-                                        // Delete button
-                                        IconButton(
-                                          icon: const Icon(Icons.delete),
-                                          color: Colors.red,
-                                          onPressed:
-                                              () => _confirmDeleteTool(index),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                    : _buildMyToolsList(),
           ),
 
           // Browse Tools Tab
           RefreshIndicator(
             onRefresh: _fetchEquipment,
-            child:
-                _isLoading
-                    ? SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: SizedBox(
-                        height: MediaQuery.of(context).size.height - 200,
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                    )
-                    : _errorMessage != null
-                    ? SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: SizedBox(
-                        height: MediaQuery.of(context).size.height - 200,
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_errorMessage!),
-                              const SizedBox(height: 12),
-                              ElevatedButton(
-                                onPressed: _fetchEquipment,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                    : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(8),
-                      itemCount: _equipmentList.length,
-                      itemBuilder: (context, index) {
-                        final tool = _equipmentList[index];
-                        final isMyTool =
-                            _currentUserId != null &&
-                            tool.ownerId == _currentUserId;
-
-                        return Card(
-                          elevation: 3,
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(12),
-                                ),
-                                child: Image.network(
-                                  tool.imageUrl.isNotEmpty ? tool.imageUrl : '',
-                                  height: 180,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder:
-                                      (context, error, stackTrace) => Container(
-                                        height: 180,
-                                        color: Colors.grey[300],
-                                        child: const Center(
-                                          child: Icon(Icons.image, size: 50),
-                                        ),
-                                      ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            tool.name,
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                tool.isAvailable
-                                                    ? Colors.green
-                                                    : Colors.red,
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            tool.isAvailable
-                                                ? 'Available'
-                                                : 'Unavailable',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (isMyTool)
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey[200],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: const Text(
-                                              'Your Tool',
-                                              style: TextStyle(fontSize: 12),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      tool.description,
-                                      style: TextStyle(color: Colors.grey[700]),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.price_change,
-                                          size: 16,
-                                          color: Colors.green,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '₹${tool.price.toString()}',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on,
-                                          size: 16,
-                                          color: Colors.grey,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(tool.location),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    if (!isMyTool && tool.isAvailable)
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.end,
-                                        children: [
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.green,
-                                            ),
-                                            onPressed:
-                                                () =>
-                                                    _launchCaller(tool.contact),
-                                            icon: const Icon(
-                                              Icons.call,
-                                              size: 16,
-                                            ),
-                                            label: const Text('Call'),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                () => _launchWhatsApp(
-                                                  tool.contact,
-                                                ),
-                                            icon: const Icon(
-                                              Icons.message,
-                                              size: 16,
-                                            ),
-                                            label: const Text('Message'),
-                                          ),
-                                        ],
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+            child: _isLoading
+                ? _buildLoadingSkeleton()
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : _buildBrowseToolsList(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height - 200,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: 3,
+          itemBuilder: (context, index) {
+            return _buildSkeletonCard();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSkeletonCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image skeleton
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+            ),
+          ),
+          // Content skeleton
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 150,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    Container(
+                      width: 80,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: 200,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: 100,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: 150,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height - 200,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 80,
+                  color: Colors.red[300],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Oops! Something went wrong',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: _fetchEquipment,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyToolsList() {
+    return AnimatedBuilder(
+      animation: _myToolsAnimationController,
+      builder: (context, child) {
+        return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(8),
+          itemCount: _myTools.length,
+          itemBuilder: (context, index) {
+            final tool = _myTools[index];
+            // Stagger animation for each card
+            final animationDelay = (index * 0.05).clamp(0.0, 0.5);
+            final controllerValue = _myToolsAnimationController.value;
+            final animationValue = controllerValue > animationDelay
+                ? ((controllerValue - animationDelay) / (1.0 - animationDelay))
+                    .clamp(0.0, 1.0)
+                : 0.0;
+
+            return Transform.translate(
+              offset: Offset(0, 20 * (1 - animationValue)),
+              child: Opacity(
+                opacity: animationValue,
+                child: Card(
+                  elevation: 3,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: Image.network(
+                          tool.imageUrl.isNotEmpty ? tool.imageUrl : '',
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (context, error, stackTrace) => Container(
+                                height: 180,
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: Icon(Icons.image, size: 50),
+                                ),
+                              ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    tool.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tool.isAvailable
+                                        ? Colors.green
+                                        : Colors.red,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    tool.isAvailable
+                                        ? 'Available'
+                                        : 'Unavailable',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              tool.description,
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.price_change,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '₹${tool.price}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(tool.location),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                // Edit button
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  color: Colors.blue,
+                                  onPressed: () => _showAddToolDialog(
+                                    tool: tool,
+                                  ),
+                                ),
+                                // Delete button
+                                IconButton(
+                                  icon: const Icon(Icons.delete),
+                                  color: Colors.red,
+                                  onPressed: () => _confirmDeleteTool(index),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBrowseToolsList() {
+    return AnimatedBuilder(
+      animation: _browseToolsAnimationController,
+      builder: (context, child) {
+        return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(8),
+          itemCount: _equipmentList.length,
+          itemBuilder: (context, index) {
+            final tool = _equipmentList[index];
+            final isMyTool =
+                _currentUserId != null && tool.ownerId == _currentUserId;
+            
+            // Stagger animation for each card
+            final animationDelay = (index * 0.05).clamp(0.0, 0.5);
+            final controllerValue = _browseToolsAnimationController.value;
+            final animationValue = controllerValue > animationDelay
+                ? ((controllerValue - animationDelay) / (1.0 - animationDelay))
+                    .clamp(0.0, 1.0)
+                : 0.0;
+
+            return Transform.translate(
+              offset: Offset(0, 20 * (1 - animationValue)),
+              child: Opacity(
+                opacity: animationValue,
+                child: Card(
+                  elevation: 3,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: Image.network(
+                          tool.imageUrl.isNotEmpty ? tool.imageUrl : '',
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (context, error, stackTrace) => Container(
+                                height: 180,
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: Icon(Icons.image, size: 50),
+                                ),
+                              ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    tool.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tool.isAvailable
+                                        ? Colors.green
+                                        : Colors.red,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    tool.isAvailable
+                                        ? 'Available'
+                                        : 'Unavailable',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (isMyTool)
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      'Your Tool',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            const SizedBox(height: 8),
+                            Text(
+                              tool.description,
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.price_change,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '₹${tool.price.toString()}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(tool.location),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (!isMyTool && tool.isAvailable)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                    ),
+                                    onPressed: () => _launchCaller(tool.contact),
+                                    icon: const Icon(Icons.call, size: 16),
+                                    label: const Text('Call'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _launchWhatsApp(tool.contact),
+                                    icon: const Icon(Icons.message, size: 16),
+                                    label: const Text('Message'),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

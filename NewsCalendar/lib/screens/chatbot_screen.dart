@@ -15,18 +15,25 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final List<ChatMessage> _messages = [];
   String? _sessionId;
   bool _isLoading = false;
+  bool _isLoadingHistory = false;
+  bool _hasMoreMessages = false;
+  DateTime? _oldestMessageTimestamp;
+  static const int _messagesPerPage = 20;
 
   @override
   void initState() {
     super.initState();
-    // Add welcome message
-    _messages.add(
-      ChatMessage(
-        text: 'Hello! I\'m your agriculture assistant. How can I help you with farming today?',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ),
-    );
+    // Show welcome message initially
+    // History will be loaded when sessionId is available (after first message)
+    if (_messages.isEmpty) {
+      _messages.add(
+        ChatMessage(
+          text: 'Hello! I\'m your agriculture assistant. How can I help you with farming today?',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
   }
 
   @override
@@ -34,6 +41,99 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Load conversation history (paginated)
+  Future<void> _loadHistoryMessages({bool loadOlder = false}) async {
+    if (_sessionId == null) return;
+    if (_isLoadingHistory) return;
+    if (loadOlder && !_hasMoreMessages) return;
+
+    setState(() {
+      _isLoadingHistory = true;
+    });
+
+    try {
+      final response = await ChatbotService.getHistoryPaginated(
+        context,
+        _sessionId!,
+        limit: _messagesPerPage,
+        beforeTimestamp: loadOlder && _oldestMessageTimestamp != null
+            ? _oldestMessageTimestamp!.toIso8601String()
+            : null,
+      );
+
+      final messages = response['messages'] as List<dynamic>;
+      final pagination = response['pagination'] as Map<String, dynamic>;
+
+      if (mounted) {
+        setState(() {
+          if (loadOlder) {
+            // Prepend older messages
+            final olderMessages = messages.map((msg) => ChatMessage(
+                  text: msg['content'] as String,
+                  isUser: msg['role'] == 'user',
+                  timestamp: DateTime.parse(msg['timestamp'] as String),
+                )).toList();
+            _messages.insertAll(0, olderMessages);
+          } else {
+            // Replace with latest messages (initial load)
+            _messages.clear();
+            _messages.addAll(messages.map((msg) => ChatMessage(
+                  text: msg['content'] as String,
+                  isUser: msg['role'] == 'user',
+                  timestamp: DateTime.parse(msg['timestamp'] as String),
+                )).toList());
+            
+            // If no messages, show welcome message
+            if (_messages.isEmpty) {
+              _messages.add(
+                ChatMessage(
+                  text: 'Hello! I\'m your agriculture assistant. How can I help you with farming today?',
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            }
+          }
+
+          _hasMoreMessages = pagination['hasMore'] as bool? ?? false;
+          if (pagination['oldestTimestamp'] != null) {
+            _oldestMessageTimestamp = DateTime.parse(pagination['oldestTimestamp'] as String);
+          }
+          _isLoadingHistory = false;
+        });
+
+        // Scroll to bottom only on initial load
+        if (!loadOlder) {
+          _scrollToBottom();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingHistory = false;
+        });
+
+        // Show error only if no messages exist
+        if (_messages.isEmpty) {
+          setState(() {
+            _messages.add(
+              ChatMessage(
+                text: 'Hello! I\'m your agriculture assistant. How can I help you with farming today?',
+                isUser: false,
+                timestamp: DateTime.now(),
+              ),
+            );
+          });
+        }
+      }
+    }
+  }
+
+  /// Load older messages when user pulls to refresh
+  Future<void> _loadOlderMessages() async {
+    await _loadHistoryMessages(loadOlder: true);
   }
 
   Future<void> _sendMessage() async {
@@ -63,6 +163,11 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       // Update session ID if this is a new conversation
       if (_sessionId == null && response['sessionId'] != null) {
         _sessionId = response['sessionId'] as String;
+        // Update oldest timestamp for pagination tracking
+        if (_messages.isNotEmpty) {
+          _oldestMessageTimestamp = _messages.first.timestamp;
+          _hasMoreMessages = true; // Assume there might be more messages
+        }
       }
 
       // Add bot response
@@ -127,24 +232,44 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       resizeToAvoidBottomInset: true,
       body: Column(
         children: [
-          // Messages list
+          // Messages list with pull-to-refresh
           Expanded(
-            child:
-                _messages.isEmpty
-                    ? Center(
-                      child: Text(
-                        'Start a conversation',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                      ),
+            child: RefreshIndicator(
+              onRefresh: _loadOlderMessages,
+              child: _messages.isEmpty
+                  ? ListView(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.3,
+                          child: Center(
+                            child: Text(
+                              'Start a conversation',
+                              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                            ),
+                          ),
+                        ),
+                      ],
                     )
-                    : ListView.builder(
+                  : ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      itemCount: _messages.length,
+                      itemCount: _messages.length + (_isLoadingHistory ? 1 : 0),
                       itemBuilder: (context, index) {
-                        return _buildMessageBubble(_messages[index]);
+                        // Show loading indicator at top when loading older messages
+                        if (index == 0 && _isLoadingHistory) {
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            alignment: Alignment.center,
+                            child: const CircularProgressIndicator(),
+                          );
+                        }
+                        
+                        // Adjust index if loading indicator is shown
+                        final messageIndex = _isLoadingHistory ? index - 1 : index;
+                        return _buildMessageBubble(_messages[messageIndex]);
                       },
                     ),
+            ),
           ),
           // Input area - moves up with keyboard
           Container(

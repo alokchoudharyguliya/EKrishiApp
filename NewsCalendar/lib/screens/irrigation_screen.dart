@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:newscalendar/utils/imports.dart';
 import 'package:http/http.dart' as http;
-import 'package:newscalendar/screens/irrigation_schedule_screen.dart';
+// COMMENTED OUT: Irrigation schedule screen - not released yet
+// import 'package:newscalendar/screens/irrigation_schedule_screen.dart';
 import 'package:newscalendar/services/pi_communication_service.dart';
 
 class IrrigationScreen extends StatefulWidget {
@@ -38,9 +39,10 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
   List<Map<String, dynamic>> _pumpTimings = [];
   bool _isLoadingPumpTimings = false;
   String? _pumpTimingsErrorMessage;
+  // COMMENTED OUT: Next scheduled irrigation state - not released yet
   // Next scheduled irrigation state
-  String? _nextScheduledTime;
-  bool _isLoadingNextScheduled = false;
+  // String? _nextScheduledTime;
+  // bool _isLoadingNextScheduled = false;
 
   // Pi Communication Service
   final PiCommunicationService _piService = PiCommunicationService();
@@ -67,7 +69,7 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
   Future<void> _refreshAllData() async {
     // Reset loading state
     setState(() => _isLoading = true);
-    
+
     // Reset all data states to ensure fresh fetch
     setState(() {
       _pumpOn = false;
@@ -77,9 +79,10 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
       _sensorErrorMessage = null;
       _pumpTimings = [];
       _pumpTimingsErrorMessage = null;
-      _nextScheduledTime = null;
+      // COMMENTED OUT: Reset next scheduled time - not released yet
+      // _nextScheduledTime = null;
     });
-    
+
     // Check device registration which will trigger all data fetches
     await _checkDeviceRegistration();
   }
@@ -139,8 +142,12 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
               data['data']['deviceId'],
             );
             // Initialize Pi communication service
-            if (data['data']['piUrl'] != null && data['data']['deviceId'] != null) {
-              await _piService.initialize(data['data']['piUrl'], data['data']['deviceId']);
+            if (data['data']['piUrl'] != null &&
+                data['data']['deviceId'] != null) {
+              await _piService.initialize(
+                data['data']['piUrl'],
+                data['data']['deviceId'],
+              );
             }
             // Fetch device status (connection and pump state)
             await _fetchDeviceStatus(data['data']['deviceId']);
@@ -148,8 +155,9 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
             await _fetchSensorData(data['data']['deviceId']);
             // Fetch pump timings
             await _fetchPumpTimings(data['data']['deviceId']);
+            // COMMENTED OUT: Fetch next scheduled irrigation - not released yet
             // Fetch next scheduled irrigation
-            await _fetchNextScheduledIrrigation(data['data']['deviceId']);
+            // await _fetchNextScheduledIrrigation(data['data']['deviceId']);
           } else {
             // Device not found, clear local storage
             await prefs.remove('irrigation_device_id');
@@ -191,8 +199,12 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
               data['data']['deviceId'],
             );
             // Initialize Pi communication service
-            if (data['data']['piUrl'] != null && data['data']['deviceId'] != null) {
-              await _piService.initialize(data['data']['piUrl'], data['data']['deviceId']);
+            if (data['data']['piUrl'] != null &&
+                data['data']['deviceId'] != null) {
+              await _piService.initialize(
+                data['data']['piUrl'],
+                data['data']['deviceId'],
+              );
             }
             // Fetch device status (connection and pump state)
             await _fetchDeviceStatus(data['data']['deviceId']);
@@ -200,8 +212,9 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
             await _fetchSensorData(data['data']['deviceId']);
             // Fetch pump timings
             await _fetchPumpTimings(data['data']['deviceId']);
+            // COMMENTED OUT: Fetch next scheduled irrigation - not released yet
             // Fetch next scheduled irrigation
-            await _fetchNextScheduledIrrigation(data['data']['deviceId']);
+            // await _fetchNextScheduledIrrigation(data['data']['deviceId']);
           } else {
             setState(() => _isDeviceRegistered = false);
           }
@@ -290,8 +303,12 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
           });
 
           // Initialize Pi communication service
-          if (responseData['data']['piUrl'] != null && responseData['data']['deviceId'] != null) {
-            await _piService.initialize(responseData['data']['piUrl'], responseData['data']['deviceId']);
+          if (responseData['data']['piUrl'] != null &&
+              responseData['data']['deviceId'] != null) {
+            await _piService.initialize(
+              responseData['data']['piUrl'],
+              responseData['data']['deviceId'],
+            );
           }
 
           // Fetch device status (connection and pump state)
@@ -300,8 +317,9 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
           await _fetchSensorData(responseData['data']['deviceId']);
           // Fetch pump timings
           await _fetchPumpTimings(responseData['data']['deviceId']);
+          // COMMENTED OUT: Fetch next scheduled irrigation - not released yet
           // Fetch next scheduled irrigation
-          await _fetchNextScheduledIrrigation(responseData['data']['deviceId']);
+          // await _fetchNextScheduledIrrigation(responseData['data']['deviceId']);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -349,17 +367,17 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
       // Try using Pi communication service first (direct or backend)
       try {
         final response = await _piService.getStatus(token: token);
-        
+
         if (response.success && response.data != null) {
           // Handle response format (could be from direct or backend)
           final data = response.data!;
-          
+
           // Check if this is backend format (has connectionStatus)
           if (data.containsKey('connectionStatus')) {
             // Backend format
             final connectionStatus = data['connectionStatus'] ?? {};
             final currentState = data['currentState'] ?? {};
-            
+
             setState(() {
               _deviceConnected = connectionStatus['isConnected'] ?? false;
               _pumpOn = currentState['pumpState'] ?? false;
@@ -371,7 +389,7 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
           } else if (data.containsKey('pumpState')) {
             // Direct Pi format
             final pumpState = data['pumpState'] ?? false;
-            
+
             setState(() {
               _deviceConnected = true; // Direct connection means connected
               _pumpOn = pumpState;
@@ -450,11 +468,14 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
 
       // Try using Pi communication service first (direct or backend)
       try {
-        final piResponse = await _piService.readSensor(sensorType, token: token);
-        
+        final piResponse = await _piService.readSensor(
+          sensorType,
+          token: token,
+        );
+
         if (piResponse.success && piResponse.data != null) {
           final data = piResponse.data!;
-          
+
           // Handle response format (could be from direct or backend)
           if (data.containsKey('sensorType') && data.containsKey('value')) {
             // Backend format: {sensorType, value, unit, timestamp, deviceId}
@@ -540,7 +561,9 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
     }
   }
 
+  // COMMENTED OUT: Fetch next scheduled irrigation method - not released yet
   /// Fetch next scheduled irrigation from backend API
+  /*
   Future<void> _fetchNextScheduledIrrigation(String deviceId) async {
     if (!mounted) return;
 
@@ -612,6 +635,7 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
       }
     }
   }
+  */
 
   /// Fetch pump timings from backend API
   Future<void> _fetchPumpTimings(String deviceId) async {
@@ -654,10 +678,14 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
           if (data['success'] == true &&
               data['data'] != null &&
               data['data']['timings'] != null) {
+            // Reorder timings so current day appears last
+            final rawTimings = List<Map<String, dynamic>>.from(
+              data['data']['timings'],
+            );
+            final reorderedTimings = _reorderPumpTimings(rawTimings);
+            
             setState(() {
-              _pumpTimings = List<Map<String, dynamic>>.from(
-                data['data']['timings'],
-              );
+              _pumpTimings = reorderedTimings;
               _isLoadingPumpTimings = false;
               _pumpTimingsErrorMessage = null;
             });
@@ -687,6 +715,50 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
         });
       }
     }
+  }
+
+  /// Reorder pump timings so current day appears last
+  /// Order: (today+1), (today+2), ..., (today-1), today
+  List<Map<String, dynamic>> _reorderPumpTimings(
+    List<Map<String, dynamic>> rawTimings,
+  ) {
+    // Map day names to indices: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
+    final dayMap = {
+      'Mon': 0,
+      'Tue': 1,
+      'Wed': 2,
+      'Thu': 3,
+      'Fri': 4,
+      'Sat': 5,
+      'Sun': 6,
+    };
+    
+    // Get today's day index (DateTime.weekday: 1=Monday, 7=Sunday)
+    // Convert to 0-6 range where 0=Monday
+    final todayWeekday = DateTime.now().weekday; // 1-7
+    final todayIndex = todayWeekday - 1; // 0-6
+    
+    // Create reordered list: tomorrow, day after tomorrow, ..., today (last)
+    final reordered = <Map<String, dynamic>>[];
+    
+    // Add days in order: (today+1), (today+2), ..., (today+6), today
+    for (int i = 1; i <= 7; i++) {
+      final dayIndex = (todayIndex + i) % 7;
+      // Find the day name for this index
+      final dayName = dayMap.entries
+          .firstWhere((entry) => entry.value == dayIndex)
+          .key;
+      
+      // Find corresponding timing data
+      final timingData = rawTimings.firstWhere(
+        (item) => item['day'] == dayName,
+        orElse: () => {'day': dayName, 'hours': 0.0},
+      );
+      
+      reordered.add(timingData);
+    }
+    
+    return reordered;
   }
 
   /// Format timestamp for display
@@ -783,14 +855,18 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
         setState(() {
           _isTogglingPump = false;
         });
-        
+
         // Refresh status to get actual pump state from Pi
         await _fetchDeviceStatus(deviceId);
 
         if (mounted) {
-          final message = response.data!['message'] ?? 
-              (response.data!['state'] == true ? 'Pump switched ON' : 'Pump switched OFF');
-          final connectionType = response.connectionType == 'direct' ? ' (Direct)' : ' (Backend)';
+          final message =
+              response.data!['message'] ??
+              (response.data!['state'] == true
+                  ? 'Pump switched ON'
+                  : 'Pump switched OFF');
+          final connectionType =
+              response.connectionType == 'direct' ? ' (Direct)' : ' (Backend)';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('$message$connectionType'),
@@ -1375,102 +1451,104 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
                         : Icon(Icons.info_outline, color: Colors.grey),
               ),
             ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ListTile(
-                leading: Icon(Icons.schedule, color: Colors.blue[700]),
-                title: const Text('Next Scheduled Irrigation'),
-                subtitle:
-                    _isLoadingNextScheduled
-                        ? const Text('Loading...')
-                        : Text(
-                          _nextScheduledTime ?? 'No schedule set',
-                          style: TextStyle(
-                            color:
-                                _nextScheduledTime == null
-                                    ? Colors.grey[600]
-                                    : null,
-                          ),
-                        ),
-                trailing:
-                    _isLoadingNextScheduled
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : Icon(
-                          Icons.alarm,
-                          color:
-                              _nextScheduledTime != null
-                                  ? Colors.orange
-                                  : Colors.grey,
-                        ),
-                onTap:
-                    _deviceData != null && _deviceData!['deviceId'] != null
-                        ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => IrrigationScheduleScreen(
-                                    deviceId: _deviceData!['deviceId'],
-                                    deviceName:
-                                        _deviceData!['deviceName'] ??
-                                        'Irrigation Device',
-                                  ),
-                            ),
-                          ).then((_) {
-                            // Refresh next scheduled time when returning
-                            if (_deviceData != null &&
-                                _deviceData!['deviceId'] != null) {
-                              _fetchNextScheduledIrrigation(
-                                _deviceData!['deviceId'],
-                              );
-                            }
-                          });
-                        }
-                        : null,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed:
-                  _deviceData != null && _deviceData!['deviceId'] != null
-                      ? () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => IrrigationScheduleScreen(
-                                  deviceId: _deviceData!['deviceId'],
-                                  deviceName:
-                                      _deviceData!['deviceName'] ??
-                                      'Irrigation Device',
-                                ),
-                          ),
-                        ).then((_) {
-                          // Refresh next scheduled time when returning
-                          if (_deviceData != null &&
-                              _deviceData!['deviceId'] != null) {
-                            _fetchNextScheduledIrrigation(
-                              _deviceData!['deviceId'],
-                            );
-                          }
-                        });
-                      }
-                      : null,
-              icon: const Icon(Icons.schedule),
-              label: const Text('Manage Schedules'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
+            // COMMENTED OUT: Next Scheduled Irrigation Card - not released yet
+            // const SizedBox(height: 12),
+            // Card(
+            //   elevation: 2,
+            //   shape: RoundedRectangleBorder(
+            //     borderRadius: BorderRadius.circular(12),
+            //   ),
+            //   child: ListTile(
+            //     leading: Icon(Icons.schedule, color: Colors.blue[700]),
+            //     title: const Text('Next Scheduled Irrigation'),
+            //     subtitle:
+            //         _isLoadingNextScheduled
+            //             ? const Text('Loading...')
+            //             : Text(
+            //               _nextScheduledTime ?? 'No schedule set',
+            //               style: TextStyle(
+            //                 color:
+            //                     _nextScheduledTime == null
+            //                         ? Colors.grey[600]
+            //                         : null,
+            //               ),
+            //             ),
+            //     trailing:
+            //         _isLoadingNextScheduled
+            //             ? const SizedBox(
+            //               width: 20,
+            //               height: 20,
+            //               child: CircularProgressIndicator(strokeWidth: 2),
+            //             )
+            //             : Icon(
+            //               Icons.alarm,
+            //               color:
+            //                   _nextScheduledTime != null
+            //                       ? Colors.orange
+            //                       : Colors.grey,
+            //             ),
+            //     onTap:
+            //         _deviceData != null && _deviceData!['deviceId'] != null
+            //             ? () {
+            //               Navigator.push(
+            //                 context,
+            //                 MaterialPageRoute(
+            //                   builder:
+            //                       (context) => IrrigationScheduleScreen(
+            //                         deviceId: _deviceData!['deviceId'],
+            //                         deviceName:
+            //                             _deviceData!['deviceName'] ??
+            //                             'Irrigation Device',
+            //                       ),
+            //                 ),
+            //               ).then((_) {
+            //                 // Refresh next scheduled time when returning
+            //                 if (_deviceData != null &&
+            //                     _deviceData!['deviceId'] != null) {
+            //                   _fetchNextScheduledIrrigation(
+            //                     _deviceData!['deviceId'],
+            //                   );
+            //                 }
+            //               });
+            //             }
+            //             : null,
+            //   ),
+            // ),
+            // COMMENTED OUT: Manage Schedules Button - not released yet
+            // const SizedBox(height: 12),
+            // ElevatedButton.icon(
+            //   onPressed:
+            //       _deviceData != null && _deviceData!['deviceId'] != null
+            //           ? () {
+            //             Navigator.push(
+            //               context,
+            //               MaterialPageRoute(
+            //                 builder:
+            //                     (context) => IrrigationScheduleScreen(
+            //                       deviceId: _deviceData!['deviceId'],
+            //                       deviceName:
+            //                           _deviceData!['deviceName'] ??
+            //                           'Irrigation Device',
+            //                     ),
+            //               ),
+            //             ).then((_) {
+            //               // Refresh next scheduled time when returning
+            //               if (_deviceData != null &&
+            //                   _deviceData!['deviceId'] != null) {
+            //                 _fetchNextScheduledIrrigation(
+            //                   _deviceData!['deviceId'],
+            //                 );
+            //               }
+            //             });
+            //           }
+            //           : null,
+            //   icon: const Icon(Icons.schedule),
+            //   label: const Text('Manage Schedules'),
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: Colors.blue,
+            //     padding: const EdgeInsets.symmetric(vertical: 12),
+            //   ),
+            // ),
           ],
         ),
       ),

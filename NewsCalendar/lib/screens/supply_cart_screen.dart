@@ -15,17 +15,31 @@ class SupplyCartScreen extends StatefulWidget {
   State<SupplyCartScreen> createState() => _SupplyCartScreenState();
 }
 
-class _SupplyCartScreenState extends State<SupplyCartScreen> {
+class _SupplyCartScreenState extends State<SupplyCartScreen>
+    with TickerProviderStateMixin {
   List<CartItem> _cartItems = [];
   bool _isLoading = true;
   String? _errorMessage;
   Map<String, Supply> _suppliesMap = {};
   Map<String, Vendor> _vendorsMap = {};
 
+  // Animation controller for cart items
+  late AnimationController _listAnimationController;
+
   @override
   void initState() {
     super.initState();
+    _listAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _loadCart();
+  }
+
+  @override
+  void dispose() {
+    _listAnimationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCart() async {
@@ -47,12 +61,14 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
       }
 
       // Parse cart items
-      final List<Map<String, dynamic>> cartItemsData = cartJson
-          .map((item) => jsonDecode(item) as Map<String, dynamic>)
-          .toList();
+      final List<Map<String, dynamic>> cartItemsData =
+          cartJson
+              .map((item) => jsonDecode(item) as Map<String, dynamic>)
+              .toList();
 
       // Get unique supply IDs
-      final supplyIds = cartItemsData.map((e) => e['supplyId'] as String).toSet().toList();
+      final supplyIds =
+          cartItemsData.map((e) => e['supplyId'] as String).toSet().toList();
 
       // Fetch all supplies
       final supplies = await Future.wait(
@@ -82,10 +98,7 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
       for (final entry in quantityMap.entries) {
         final supply = _suppliesMap[entry.key];
         if (supply != null) {
-          items.add(CartItem(
-            supply: supply,
-            quantity: entry.value,
-          ));
+          items.add(CartItem(supply: supply, quantity: entry.value));
         }
       }
 
@@ -93,6 +106,8 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
         _cartItems = items;
         _isLoading = false;
       });
+      // Animate cart items in after loading
+      _listAnimationController.forward();
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load cart';
@@ -105,12 +120,13 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
   Future<void> _updateCart() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cartJson = _cartItems.map((item) {
-        return jsonEncode({
-          'supplyId': item.supply.id,
-          'quantity': item.quantity,
-        });
-      }).toList();
+      final cartJson =
+          _cartItems.map((item) {
+            return jsonEncode({
+              'supplyId': item.supply.id,
+              'quantity': item.quantity,
+            });
+          }).toList();
 
       await prefs.setStringList('supply_cart', cartJson);
     } catch (e) {
@@ -182,9 +198,35 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        appBar: null,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: AppBar(title: const Text('Cart')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                  strokeWidth: 3,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Loading your cart...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -192,18 +234,48 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('Cart')),
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(_errorMessage!, style: TextStyle(color: Colors.grey[600])),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadCart,
-                child: const Text('Retry'),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 80,
+                  color: Colors.red[300],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Oops! Something went wrong',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: _loadCart,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -213,16 +285,53 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('Shopping Cart')),
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                'Your cart is empty',
-                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.shopping_cart_outlined,
+                  size: 80,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Your cart is empty',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Start adding items to your cart',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.shopping_bag),
+                  label: const Text('Browse Supplies'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -241,23 +350,29 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
               onPressed: () {
                 showDialog(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Clear Cart'),
-                    content: const Text('Are you sure you want to clear all items?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
+                  builder:
+                      (context) => AlertDialog(
+                        title: const Text('Clear Cart'),
+                        content: const Text(
+                          'Are you sure you want to clear all items?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _clearCart();
+                            },
+                            child: const Text(
+                              'Clear',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
                       ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _clearCart();
-                        },
-                        child: const Text('Clear', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
                 );
               },
             ),
@@ -266,68 +381,102 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: groupedItems.length,
-              itemBuilder: (context, vendorIndex) {
-                final vendorId = groupedItems.keys.elementAt(vendorIndex);
-                final items = groupedItems[vendorId]!;
-                final vendor = _vendorsMap[vendorId];
+            child: AnimatedBuilder(
+              animation: _listAnimationController,
+              builder: (context, child) {
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: groupedItems.length,
+                  itemBuilder: (context, vendorIndex) {
+                    final vendorId = groupedItems.keys.elementAt(vendorIndex);
+                    final items = groupedItems[vendorId]!;
+                    final vendor = _vendorsMap[vendorId];
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (vendor != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.store, size: 16, color: Colors.grey[600]),
-                            const SizedBox(width: 8),
-                            Text(
-                              vendor.vendorName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                    // Calculate starting index for this vendor group
+                    int itemIndex = 0;
+                    for (int i = 0; i < vendorIndex; i++) {
+                      itemIndex += groupedItems.values.elementAt(i).length;
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (vendor != null) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.store,
+                                  size: 16,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  vendor.vendorName,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        ...items.asMap().entries.map((entry) {
+                          final globalIndex = itemIndex + entry.key;
+                          final index = _cartItems.indexOf(entry.value);
+                          final item = entry.value;
+                          final orderItem = OrderItem(
+                            supplyId: item.supply.id,
+                            supplyName: item.supply.name,
+                            quantity: item.quantity,
+                            unitPrice: item.supply.pricePerUnit,
+                            totalPrice: item.supply.pricePerUnit * item.quantity,
+                            unit: item.supply.unit,
+                          );
+
+                          // Stagger animation for each item
+                          final animationDelay = (globalIndex * 0.05).clamp(0.0, 0.5);
+                          final controllerValue = _listAnimationController.value;
+                          final animationValue = controllerValue > animationDelay
+                              ? ((controllerValue - animationDelay) /
+                                      (1.0 - animationDelay))
+                                  .clamp(0.0, 1.0)
+                              : 0.0;
+
+                          return Transform.translate(
+                            offset: Offset(0, 20 * (1 - animationValue)),
+                            child: Opacity(
+                              opacity: animationValue,
+                              child: Dismissible(
+                                key: Key('${item.supply.id}_$index'),
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.only(right: 20),
+                                  color: Colors.red,
+                                  child: const Icon(Icons.delete, color: Colors.white),
+                                ),
+                                onDismissed: (_) => _removeItem(index),
+                                child: OrderItemTile(
+                                  item: orderItem,
+                                  showQuantityControls: true,
+                                  onIncrease: () => _updateQuantity(index, 1),
+                                  onDecrease: () => _updateQuantity(index, -1),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    ...items.asMap().entries.map((entry) {
-                      final index = _cartItems.indexOf(entry.value);
-                      final item = entry.value;
-                      final orderItem = OrderItem(
-                        supplyId: item.supply.id,
-                        supplyName: item.supply.name,
-                        quantity: item.quantity,
-                        unitPrice: item.supply.pricePerUnit,
-                        totalPrice: item.supply.pricePerUnit * item.quantity,
-                        unit: item.supply.unit,
-                      );
-
-                      return Dismissible(
-                        key: Key('${item.supply.id}_$index'),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          color: Colors.red,
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        onDismissed: (_) => _removeItem(index),
-                        child: OrderItemTile(
-                          item: orderItem,
-                          showQuantityControls: true,
-                          onIncrease: () => _updateQuantity(index, 1),
-                          onDecrease: () => _updateQuantity(index, -1),
-                        ),
-                      );
-                    }).toList(),
-                    if (vendorIndex < groupedItems.length - 1)
-                      const Divider(height: 32),
-                  ],
+                          );
+                        }).toList(),
+                        if (vendorIndex < groupedItems.length - 1)
+                          const Divider(height: 32),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -376,7 +525,8 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => CreateOrderScreen(cartItems: _cartItems),
+                          builder:
+                              (_) => CreateOrderScreen(cartItems: _cartItems),
                         ),
                       );
                     },
@@ -390,7 +540,10 @@ class _SupplyCartScreenState extends State<SupplyCartScreen> {
                     ),
                     child: const Text(
                       'Proceed to Checkout',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -407,10 +560,5 @@ class CartItem {
   final Supply supply;
   double quantity;
 
-  CartItem({
-    required this.supply,
-    required this.quantity,
-  });
+  CartItem({required this.supply, required this.quantity});
 }
-
-

@@ -5,8 +5,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../constants/constants.dart';
 import '../models/events.dart' as eventModel;
-import 'auth_service.dart';
-import 'package:provider/provider.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -71,8 +69,21 @@ class NotificationService {
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    // Handle notification tap - can navigate to event details
+    // Handle notification tap - can navigate to event details or animal detection alert
     print('Notification tapped: ${response.payload}');
+    
+    if (response.payload != null) {
+      try {
+        final payload = jsonDecode(response.payload!);
+        if (payload['type'] == 'animal_detection') {
+          // Navigate to animal detection alert screen
+          // This will be handled by the app's main navigation
+          print('Animal detection alert tapped: ${payload['alertId']}');
+        }
+      } catch (e) {
+        print('Error parsing notification payload: $e');
+      }
+    }
   }
 
   /// Schedule a notification for an event reminder
@@ -254,6 +265,76 @@ class NotificationService {
       ),
       payload: payload,
     );
+  }
+
+  /// Show animal detection alert notification
+  /// 
+  /// Phase 4 - Animal Detection Implementation
+  Future<void> showAnimalDetectionAlert({
+    required String alertId,
+    required String deviceId,
+    required String deviceName,
+    required int cameraId,
+    required String cameraName,
+    required String animalType,
+    required double confidence,
+    DateTime? timestamp,
+  }) async {
+    if (!_initialized) {
+      await initialize();
+    }
+
+    final now = timestamp ?? DateTime.now();
+    final title = '🐾 Animal Detected: ${animalType.toUpperCase()}';
+    final body = 'Detected on $deviceName - $cameraName (${(confidence * 100).toStringAsFixed(0)}% confidence)';
+
+    await _notifications.show(
+      // Use alertId hash for unique notification ID
+      alertId.hashCode.abs(),
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'animal_detection_alerts',
+          'Animal Detection Alerts',
+          channelDescription: 'Notifications for animal detections from farm cameras',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: true,
+          enableVibration: true,
+          playSound: true,
+          icon: '@mipmap/ic_launcher',
+          styleInformation: BigTextStyleInformation(body),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          sound: 'default',
+        ),
+      ),
+      payload: jsonEncode({
+        'type': 'animal_detection',
+        'alertId': alertId,
+        'deviceId': deviceId,
+        'cameraId': cameraId,
+        'animalType': animalType,
+        'confidence': confidence,
+        'timestamp': now.toIso8601String(),
+      }),
+    );
+  }
+
+  /// Setup listener for animal detection alerts from backend
+  /// 
+  /// Phase 4 - Animal Detection Implementation
+  /// This should be called when app starts to listen for real-time alerts
+  void setupAnimalDetectionListener({
+    required Function(NotificationResponse) onAlertTapped,
+  }) {
+    // Update notification tap handler to include animal detection
+    // Note: This requires re-initializing the notification plugin with custom handler
+    // For now, we'll use the existing _onNotificationTapped which we've already updated
   }
 }
 

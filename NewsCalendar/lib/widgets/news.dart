@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import '../screens/news_detail_screen.dart';
+import '../services/bookmark_service.dart';
 
 class NewsCard extends StatefulWidget {
+  final String id;
   final String imageUrl;
   final String title;
   final String description;
+  final String fullContent;
+  final List<String>? sources;
 
   const NewsCard({
     Key? key,
+    required this.id,
     required this.imageUrl,
     required this.title,
     required this.description,
+    this.fullContent = '',
+    this.sources,
   }) : super(key: key);
 
   @override
@@ -19,8 +26,43 @@ class NewsCard extends StatefulWidget {
 
 class _NewsCardState extends State<NewsCard> {
   bool _expanded = false;
-  bool _bookmarked = false; // <-- Add this line
+  bool _bookmarked = false;
+  final BookmarkService _bookmarkService = BookmarkService();
   static const int _maxChars = 80;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBookmarkStatus();
+  }
+
+  Future<void> _loadBookmarkStatus() async {
+    final isBookmarked = await _bookmarkService.isBookmarked(widget.id);
+    if (mounted) {
+      setState(() {
+        _bookmarked = isBookmarked;
+      });
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    setState(() {
+      _bookmarked = !_bookmarked;
+    });
+
+    if (_bookmarked) {
+      await _bookmarkService.saveBookmark(widget.id, {
+        'id': widget.id,
+        'imageUrl': widget.imageUrl,
+        'title': widget.title,
+        'description': widget.description,
+        'fullContent': widget.fullContent.isNotEmpty ? widget.fullContent : widget.description,
+        'sources': widget.sources ?? [],
+      });
+    } else {
+      await _bookmarkService.removeBookmark(widget.id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,11 +133,7 @@ class _NewsCardState extends State<NewsCard> {
                             color: _bookmarked ? Colors.orange : Colors.grey,
                           ),
                           tooltip: _bookmarked ? 'Remove Bookmark' : 'Bookmark',
-                          onPressed: () {
-                            setState(() {
-                              _bookmarked = !_bookmarked;
-                            });
-                          },
+                          onPressed: _toggleBookmark,
                         ),
                       ],
                     ),
@@ -133,21 +171,17 @@ class _NewsCardState extends State<NewsCard> {
           ),
         ),
       ),
-      onDoubleTap: () {
+      onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder:
                 (_) => NewsDetailScreen(
+                  newsId: widget.id,
                   imageUrl: widget.imageUrl,
                   title: widget.title,
-                  description: widget.description,
-                  videoUrl:
-                      'https://your.video.url/here.mp4', // or null if not available
-                  sources: [
-                    'https://news-source-1.com',
-                    'https://news-source-2.com',
-                  ],
+                  description: widget.fullContent.isNotEmpty ? widget.fullContent : widget.description,
+                  sources: widget.sources,
                 ),
           ),
         );

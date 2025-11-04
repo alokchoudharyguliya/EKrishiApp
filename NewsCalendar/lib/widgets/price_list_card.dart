@@ -14,11 +14,26 @@ class PriceListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFD700), // Golden yellow (sunshine)
+            Color(0xFF228B22), // Green (crops)
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -31,18 +46,32 @@ class PriceListCard extends StatelessWidget {
                   if (mandiName != null)
                     Text(
                       mandiName!,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: colorScheme.primary,
+                        color: Colors.white,
                         fontSize: 16,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 3,
+                            offset: Offset(1, 1),
+                          ),
+                        ],
                       ),
                     ),
                   if (date != null)
                     Text(
                       date!,
-                      style: TextStyle(
-                        color: colorScheme.onSurface.withOpacity(0.7),
+                      style: const TextStyle(
+                        color: Colors.white,
                         fontSize: 13,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 3,
+                            offset: Offset(1, 1),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -59,15 +88,30 @@ class PriceListCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black45,
+                              blurRadius: 3,
+                              offset: Offset(1, 1),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                     Text(
                       entry.value,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 15,
-                        color: colorScheme.secondary,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 3,
+                            offset: Offset(1, 1),
+                          ),
+                        ],
                       ),
                     ),
                   ],

@@ -108,6 +108,77 @@ class ChatbotService {
     }
   }
 
+  /// Get paginated conversation history
+  /// Returns messages and pagination metadata
+  static Future<Map<String, dynamic>> getHistoryPaginated(
+    BuildContext context,
+    String sessionId, {
+    int limit = 20,
+    String? beforeTimestamp,
+  }) async {
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = await authService.getAuthToken();
+
+      if (token == null) {
+        throw Exception('Authentication required. Please log in.');
+      }
+
+      // Build URL with query parameters
+      final queryParams = <String, String>{
+        'sessionId': sessionId,
+        'limit': limit.toString(),
+      };
+      
+      if (beforeTimestamp != null) {
+        queryParams['beforeTimestamp'] = beforeTimestamp;
+      }
+
+      final url = Uri.parse('$BASE_URL$baseEndpoint/history').replace(
+        queryParameters: queryParams,
+      );
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout. Please check your connection.');
+        },
+      );
+
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        final messages = responseData['messages'] as List<dynamic>;
+        final pagination = responseData['pagination'] as Map<String, dynamic>?;
+        
+        return {
+          'messages': messages.map((msg) => msg as Map<String, dynamic>).toList(),
+          'pagination': pagination ?? {
+            'hasMore': false,
+            'totalCount': messages.length,
+            'returnedCount': messages.length,
+            'oldestTimestamp': null,
+          },
+        };
+      } else {
+        final errorMessage = responseData['message'] as String? ?? 
+                           'Failed to load conversation history';
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
   /// Delete conversation history
   static Future<void> deleteHistory(
     BuildContext context,

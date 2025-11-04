@@ -13,7 +13,8 @@ class FullScreenCalendar extends StatefulWidget {
   _FullScreenCalendarState createState() => _FullScreenCalendarState();
 }
 
-class _FullScreenCalendarState extends State<FullScreenCalendar> {
+class _FullScreenCalendarState extends State<FullScreenCalendar>
+    with TickerProviderStateMixin {
   DateTime _focusedDay = DateTime.now();
   // COMMENTED OUT: All Hive box usage - now using WebSocket-only event fetching
   // late final Box<eventModel.Event> _eventsBox;
@@ -23,6 +24,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   final Uuid _uuid = Uuid();
   OverlayEntry? _overlayEntry;
   AnimationController? _animationController;
+  AnimationController? _eventsListController;
   Map<String, List<eventModel.Event>> _events = {};
   List<String> _eventIds = [];
   final String apiBaseUrl = SOCK_BASE_URL;
@@ -345,17 +347,53 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   */
 
   void _initializeWebSocket() {
+    // Prevent duplicate connections
+    if (_isWebSocketInitialized ||
+        (_channel != null && _channel!.closeCode == null)) {
+      debugPrint('WebSocket: Already connected or connecting, skipping');
+      return;
+    }
+
     final authService = Provider.of<AuthService>(context, listen: false);
     final token = authService.token;
 
+    // Check if token exists before connecting
+    if (token == null || token.isEmpty) {
+      debugPrint('WebSocket: No token available, cannot connect');
+      _isWebSocketInitialized = false;
+      return;
+    }
+
+    debugPrint('WebSocket: Starting connection to $EVENTS_WEBSOCKET_URL');
+    debugPrint('WebSocket: Token exists: ${token != null && token.isNotEmpty}');
+    debugPrint('WebSocket: Token length: ${token?.length ?? 0}');
     try {
+      // Close existing channel if any
+      _channel?.sink.close();
+      _channel = null;
+
+      // Connect to backend event management WebSocket endpoint
+      // Use Uri.parse to ensure proper URL handling
+      final uri = Uri.parse(EVENTS_WEBSOCKET_URL);
+      debugPrint('WebSocket: Parsed URI: $uri');
+      debugPrint(
+        'WebSocket: Connecting with headers: Authorization: Bearer ${token?.substring(0, 20)}...',
+      );
+
       _channel = IOWebSocketChannel.connect(
-        SOCK_BASE_URL,
+        uri,
         headers: {'Authorization': 'Bearer $token'},
+      );
+
+      debugPrint(
+        'WebSocket: Connection established, waiting for backend response',
       );
 
       _channel?.stream.listen(
         (message) {
+          debugPrint(
+            'WebSocket: Received message: ${message.toString().substring(0, 100)}...',
+          );
           // COMMENTED OUT: pendingEvents ack handling - now using WebSocket only
           // final data = jsonDecode(message);
           // if (data['type'] == 'ack') {
@@ -365,11 +403,57 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
         },
         onError: (err) {
           debugPrint('WebSocket error: $err');
+          debugPrint('WebSocket error type: ${err.runtimeType}');
           _channel?.sink.close();
           _channel = null;
           _isWebSocketInitialized = false;
+          // Attempt reconnection after delay
+          Future.delayed(Duration(seconds: 5), () {
+            if (mounted && !_isWebSocketInitialized) {
+              debugPrint('WebSocket: Attempting reconnection after error');
+              _initializeWebSocket();
+            }
+          });
+        },
+        onDone: () {
+          final closeCode = _channel?.closeCode;
+          final closeReason = _channel?.closeReason;
+          debugPrint(
+            'WebSocket connection closed. Code: $closeCode, Reason: $closeReason',
+          );
+          _channel = null;
+          _isWebSocketInitialized = false;
+          // Only reconnect if not an auth error (code 1008)
+          if (closeCode != 1008) {
+            Future.delayed(Duration(seconds: 5), () {
+              if (mounted && !_isWebSocketInitialized) {
+                debugPrint('WebSocket: Attempting reconnection after close');
+                _initializeWebSocket();
+              }
+            });
+          } else {
+            debugPrint(
+              'WebSocket: Auth error (1008), not reconnecting automatically',
+            );
+          }
         },
       );
+
+      // Send initial message to trigger backend authentication
+      // Backend waits for first message before checking auth
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (_channel != null && _channel!.closeCode == null) {
+          try {
+            _channel!.sink.add(jsonEncode({'action': 'refresh'}));
+            debugPrint(
+              'WebSocket: Sent initial refresh message to trigger auth',
+            );
+          } catch (e) {
+            debugPrint('WebSocket: Error sending initial message: $e');
+          }
+        }
+      });
+
       _isWebSocketInitialized = true;
     } catch (e) {
       debugPrint('WebSocket initialization error: $e');
@@ -676,35 +760,152 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
   }
 
   void _connectToWebSocket() {
+    // Prevent duplicate connections - use _initializeWebSocket instead
+    if (_isWebSocketInitialized ||
+        (_channel != null && _channel!.closeCode == null)) {
+      debugPrint(
+        'WebSocket: Already connected or connecting, redirecting to _initializeWebSocket',
+      );
+      if (!_isWebSocketInitialized) {
+        _initializeWebSocket();
+      }
+      return;
+    }
+
     try {
       _getCurrentUser();
-      _channel?.sink.close();
       final authService = Provider.of<AuthService>(context, listen: false);
       final token = authService.token;
+
+      // Check if token exists before connecting
+      if (token == null || token.isEmpty) {
+        debugPrint('WebSocket: No token available, cannot connect');
+        Future.delayed(Duration(seconds: 5), () {
+          if (mounted && !_isWebSocketInitialized) {
+            _connectToWebSocket();
+          }
+        });
+        return;
+      }
+
+      // Close existing channel if any
+      _channel?.sink.close();
+      _channel = null;
+
+      debugPrint(
+        'WebSocket: Starting connection via _connectToWebSocket to $EVENTS_WEBSOCKET_URL',
+      );
+      // Connect to backend event management WebSocket endpoint
+      // Use Uri.parse to ensure proper URL handling
+      final uri = Uri.parse(EVENTS_WEBSOCKET_URL);
+      debugPrint('WebSocket: Parsed URI: $uri');
+      debugPrint(
+        'WebSocket: Connecting with headers: Authorization: Bearer ${token?.substring(0, 20)}...',
+      );
+
       _channel = IOWebSocketChannel.connect(
-        '$apiBaseUrl?token=$token',
+        uri,
         headers: {'Authorization': 'Bearer $token'},
+      );
+
+      debugPrint(
+        'WebSocket: Connection established via _connectToWebSocket, waiting for backend response',
       );
 
       _channel?.stream.listen(
         (message) {
+          debugPrint(
+            'WebSocket: Received message via _connectToWebSocket: ${message.toString().substring(0, 100)}...',
+          );
           _processWebSocketMessage(message);
         },
         onError: (error) {
-          Future.delayed(Duration(seconds: 5), _connectToWebSocket);
+          debugPrint('WebSocket connection error: $error');
+          debugPrint('WebSocket error type: ${error.runtimeType}');
+          _channel = null;
+          _isWebSocketInitialized = false;
+          Future.delayed(Duration(seconds: 5), () {
+            if (mounted && !_isWebSocketInitialized) {
+              debugPrint('WebSocket: Attempting reconnection after error');
+              _connectToWebSocket();
+            }
+          });
         },
         onDone: () {
-          Future.delayed(Duration(seconds: 5), _connectToWebSocket);
+          final closeCode = _channel?.closeCode;
+          final closeReason = _channel?.closeReason;
+          debugPrint(
+            'WebSocket connection closed via _connectToWebSocket. Code: $closeCode, Reason: $closeReason',
+          );
+          _channel = null;
+          _isWebSocketInitialized = false;
+          // Only reconnect if not an auth error (code 1008)
+          if (closeCode != 1008) {
+            Future.delayed(Duration(seconds: 5), () {
+              if (mounted && !_isWebSocketInitialized) {
+                debugPrint('WebSocket: Attempting reconnection after close');
+                _connectToWebSocket();
+              }
+            });
+          } else {
+            debugPrint(
+              'WebSocket: Auth error (1008), not reconnecting automatically',
+            );
+          }
         },
       );
+
+      // Send initial message to trigger backend authentication
+      // Backend waits for first message before checking auth
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (_channel != null && _channel!.closeCode == null) {
+          try {
+            _channel!.sink.add(jsonEncode({'action': 'refresh'}));
+            debugPrint(
+              'WebSocket: Sent initial refresh message to trigger auth',
+            );
+          } catch (e) {
+            debugPrint('WebSocket: Error sending initial message: $e');
+          }
+        }
+      });
+
+      _isWebSocketInitialized = true;
     } catch (e) {
-      Future.delayed(Duration(seconds: 5), _connectToWebSocket);
+      debugPrint('WebSocket connection error: $e');
+      _channel = null;
+      _isWebSocketInitialized = false;
+      Future.delayed(Duration(seconds: 5), () {
+        if (mounted && !_isWebSocketInitialized) {
+          _connectToWebSocket();
+        }
+      });
     }
   }
 
   void _processWebSocketMessage(dynamic message) {
     try {
       final responseData = json.decode(message);
+      debugPrint('WebSocket: Processing message type: ${responseData["type"]}');
+
+      // Handle authentication errors from backend
+      if (responseData["type"] == "auth_error") {
+        final errorMsg = responseData["message"] ?? 'Authentication failed';
+        debugPrint('WebSocket auth error: $errorMsg');
+        debugPrint('WebSocket auth error full response: $responseData');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Authentication failed. Please log in again.'),
+            duration: Duration(seconds: 4),
+            backgroundColor: Colors.red,
+          ),
+        );
+        // Close connection and don't reconnect automatically on auth errors
+        _channel?.sink.close();
+        _channel = null;
+        _isWebSocketInitialized = false;
+        return;
+      }
 
       if (responseData["type"] == "events") {
         // Replace all events with server data
@@ -938,6 +1139,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     // DO NOT close WebSocket channel here - it's still needed for event operations
     _animationController?.dispose();
     _animationController = null;
+    _eventsListController?.dispose();
+    _eventsListController = null;
   }
 
   bool _isWeekend(DateTime day) {
@@ -949,7 +1152,13 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
-      vsync: Navigator.of(context),
+      vsync: this,
+    );
+
+    // Initialize events list animation controller
+    _eventsListController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
     );
 
     final screenSize = MediaQuery.of(context).size;
@@ -1020,153 +1229,360 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                             ),
                             SizedBox(height: 10),
                             Expanded(
-                              child: ListView.builder(
-                                itemCount: dayEvents.length,
-                                itemBuilder: (context, index) {
-                                  final event = dayEvents[index];
-                                  final isUserEvent =
-                                      event.userId == _currentUserId;
-                                  return ListTile(
-                                    leading:
-                                        isUserEvent
-                                            ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                SizedBox(
-                                                  width: 40, // Increased width
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      Icons.edit,
-                                                      size:
-                                                          24, // Increased size
-                                                    ),
-                                                    color:
-                                                        Theme.of(
-                                                          context,
-                                                        ).colorScheme.primary,
-                                                    onPressed: () {
-                                                      _removeOverlay();
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder:
-                                                              (
-                                                                context,
-                                                              ) => UpdateEventScreen(
-                                                                event: event,
-                                                                updateCallback:
-                                                                    _updateEventViaWebSocket,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
+                              child:
+                                  _eventsListController != null
+                                      ? AnimatedBuilder(
+                                        animation: _eventsListController!,
+                                        builder: (context, child) {
+                                          return ListView.builder(
+                                            itemCount: dayEvents.length,
+                                            itemBuilder: (context, index) {
+                                              final event = dayEvents[index];
+                                              final isUserEvent =
+                                                  event.userId ==
+                                                  _currentUserId;
+
+                                              // Stagger animation for each item
+                                              final animationDelay = (index *
+                                                      0.08)
+                                                  .clamp(0.0, 0.5);
+                                              final controllerValue =
+                                                  _eventsListController!.value;
+                                              final animationValue =
+                                                  controllerValue >
+                                                          animationDelay
+                                                      ? ((controllerValue -
+                                                                  animationDelay) /
+                                                              (1.0 -
+                                                                  animationDelay))
+                                                          .clamp(0.0, 1.0)
+                                                      : 0.0;
+
+                                              return Transform.translate(
+                                                offset: Offset(
+                                                  0,
+                                                  20 * (1 - animationValue),
                                                 ),
-                                                SizedBox(
-                                                  width: 40, // Increased width
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      Icons.delete,
-                                                      size:
-                                                          24, // Increased size
-                                                      color: Colors.red,
-                                                    ),
-                                                    onPressed: () {
-                                                      _removeOverlay();
-                                                      showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (
-                                                              context,
-                                                            ) => AlertDialog(
-                                                              title: Text(
-                                                                'Delete Event',
-                                                              ),
-                                                              content: Text(
-                                                                'Are you sure you want to delete this event?',
-                                                              ),
-                                                              actions: [
-                                                                TextButton(
-                                                                  onPressed:
-                                                                      () => Navigator.pop(
+                                                child: Opacity(
+                                                  opacity: animationValue,
+                                                  child: ListTile(
+                                                    leading:
+                                                        isUserEvent
+                                                            ? Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                SizedBox(
+                                                                  width: 40,
+                                                                  child: IconButton(
+                                                                    icon: Icon(
+                                                                      Icons
+                                                                          .edit,
+                                                                      size: 24,
+                                                                    ),
+                                                                    color:
+                                                                        Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.primary,
+                                                                    onPressed: () {
+                                                                      _removeOverlay();
+                                                                      Navigator.push(
                                                                         context,
-                                                                      ),
-                                                                  child: Text(
-                                                                    'Cancel',
+                                                                        MaterialPageRoute(
+                                                                          builder:
+                                                                              (
+                                                                                context,
+                                                                              ) => UpdateEventScreen(
+                                                                                event:
+                                                                                    event,
+                                                                                updateCallback:
+                                                                                    _updateEventViaWebSocket,
+                                                                              ),
+                                                                        ),
+                                                                      );
+                                                                    },
                                                                   ),
                                                                 ),
-                                                                ElevatedButton(
-                                                                  style: ElevatedButton.styleFrom(
-                                                                    backgroundColor:
-                                                                        Colors
-                                                                            .red,
-                                                                  ),
-                                                                  onPressed: () {
-                                                                    _deleteEventViaWebSocket(
-                                                                      event.id,
-                                                                      event,
-                                                                    );
-                                                                    Navigator.pop(
-                                                                      context,
-                                                                    );
-                                                                  },
-                                                                  child: Text(
-                                                                    'Delete',
+                                                                SizedBox(
+                                                                  width: 40,
+                                                                  child: IconButton(
+                                                                    icon: Icon(
+                                                                      Icons
+                                                                          .delete,
+                                                                      size: 24,
+                                                                      color:
+                                                                          Colors
+                                                                              .red,
+                                                                    ),
+                                                                    onPressed: () {
+                                                                      _removeOverlay();
+                                                                      showDialog(
+                                                                        context:
+                                                                            context,
+                                                                        builder:
+                                                                            (
+                                                                              context,
+                                                                            ) => AlertDialog(
+                                                                              title: Text(
+                                                                                'Delete Event',
+                                                                              ),
+                                                                              content: Text(
+                                                                                'Are you sure you want to delete this event?',
+                                                                              ),
+                                                                              actions: [
+                                                                                TextButton(
+                                                                                  onPressed:
+                                                                                      () => Navigator.pop(
+                                                                                        context,
+                                                                                      ),
+                                                                                  child: Text(
+                                                                                    'Cancel',
+                                                                                  ),
+                                                                                ),
+                                                                                ElevatedButton(
+                                                                                  style: ElevatedButton.styleFrom(
+                                                                                    backgroundColor:
+                                                                                        Colors.red,
+                                                                                  ),
+                                                                                  onPressed: () {
+                                                                                    _deleteEventViaWebSocket(
+                                                                                      event.id,
+                                                                                      event,
+                                                                                    );
+                                                                                    Navigator.pop(
+                                                                                      context,
+                                                                                    );
+                                                                                  },
+                                                                                  child: Text(
+                                                                                    'Delete',
+                                                                                  ),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                      );
+                                                                    },
                                                                   ),
                                                                 ),
                                                               ],
+                                                            )
+                                                            : SizedBox(
+                                                              width: 60,
                                                             ),
-                                                      );
-                                                    },
+                                                    title: Container(
+                                                      width: double.infinity,
+                                                      child: Text(
+                                                        event.title.isNotEmpty
+                                                            ? event.title
+                                                            : 'No Title',
+                                                        style: TextStyle(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    subtitle: Container(
+                                                      width: double.infinity,
+                                                      child: Text(
+                                                        event.description ??
+                                                            'No Description',
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          color:
+                                                              Colors.grey[600],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    trailing: SizedBox(
+                                                      width: 30,
+                                                      child: Icon(
+                                                        Icons.event,
+                                                        size: 24,
+                                                        color:
+                                                            isUserEvent
+                                                                ? Colors.orange
+                                                                : Colors.green,
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
-                                              ],
-                                            )
-                                            : SizedBox(width: 60),
-                                    title: Container(
-                                      width: double.infinity,
-                                      child: Text(
-                                        event.title.isNotEmpty
-                                            ? event.title
-                                            : 'No Title',
-                                        style: TextStyle(
-                                          fontSize: 18, // Larger font size
-                                          fontWeight: FontWeight.bold, // Bold
-                                        ),
+                                              );
+                                            },
+                                          );
+                                        },
+                                      )
+                                      : ListView.builder(
+                                        itemCount: dayEvents.length,
+                                        itemBuilder: (context, index) {
+                                          final event = dayEvents[index];
+                                          final isUserEvent =
+                                              event.userId == _currentUserId;
+                                          return ListTile(
+                                            leading:
+                                                isUserEvent
+                                                    ? Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 40,
+                                                          child: IconButton(
+                                                            icon: Icon(
+                                                              Icons.edit,
+                                                              size: 24,
+                                                            ),
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary,
+                                                            onPressed: () {
+                                                              _removeOverlay();
+                                                              Navigator.push(
+                                                                context,
+                                                                MaterialPageRoute(
+                                                                  builder:
+                                                                      (
+                                                                        context,
+                                                                      ) => UpdateEventScreen(
+                                                                        event:
+                                                                            event,
+                                                                        updateCallback:
+                                                                            _updateEventViaWebSocket,
+                                                                      ),
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 40,
+                                                          child: IconButton(
+                                                            icon: Icon(
+                                                              Icons.delete,
+                                                              size: 24,
+                                                              color: Colors.red,
+                                                            ),
+                                                            onPressed: () {
+                                                              _removeOverlay();
+                                                              showDialog(
+                                                                context:
+                                                                    context,
+                                                                builder:
+                                                                    (
+                                                                      context,
+                                                                    ) => AlertDialog(
+                                                                      title: Text(
+                                                                        'Delete Event',
+                                                                      ),
+                                                                      content: Text(
+                                                                        'Are you sure you want to delete this event?',
+                                                                      ),
+                                                                      actions: [
+                                                                        TextButton(
+                                                                          onPressed:
+                                                                              () => Navigator.pop(
+                                                                                context,
+                                                                              ),
+                                                                          child: Text(
+                                                                            'Cancel',
+                                                                          ),
+                                                                        ),
+                                                                        ElevatedButton(
+                                                                          style: ElevatedButton.styleFrom(
+                                                                            backgroundColor:
+                                                                                Colors.red,
+                                                                          ),
+                                                                          onPressed: () {
+                                                                            _deleteEventViaWebSocket(
+                                                                              event.id,
+                                                                              event,
+                                                                            );
+                                                                            Navigator.pop(
+                                                                              context,
+                                                                            );
+                                                                          },
+                                                                          child: Text(
+                                                                            'Delete',
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    )
+                                                    : SizedBox(width: 60),
+                                            title: Container(
+                                              width: double.infinity,
+                                              child: Text(
+                                                event.title.isNotEmpty
+                                                    ? event.title
+                                                    : 'No Title',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                            subtitle: Container(
+                                              width: double.infinity,
+                                              child: Text(
+                                                event.description ??
+                                                    'No Description',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ),
+                                            trailing: SizedBox(
+                                              width: 30,
+                                              child: Icon(
+                                                Icons.event,
+                                                size: 24,
+                                                color:
+                                                    isUserEvent
+                                                        ? Colors.orange
+                                                        : Colors.green,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    ),
-                                    subtitle: Container(
-                                      width: double.infinity,
-                                      child: Text(
-                                        event.description ?? 'No Description',
-                                        style: TextStyle(
-                                          fontSize: 14, // Smaller font size
-                                          color: Colors.grey[600], // Grey color
-                                        ),
-                                      ),
-                                    ),
-                                    trailing: SizedBox(
-                                      width: 30, // Increased width
-                                      child: Icon(
-                                        Icons.event,
-                                        size: 24, // Increased size
-                                        color:
-                                            isUserEvent
-                                                ? Colors.orange
-                                                : Colors.green,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
                             ),
                           ] else
-                            Text(
-                              'No events for this day',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                              ),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.event_busy,
+                                  size: 64,
+                                  color: Colors.grey[400],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No events for this day',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Tap the + button to add an event',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[500],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
                             ),
                           SizedBox(height: 20),
                           ElevatedButton(
@@ -1208,7 +1624,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
                                 "title":
                                     _newEventTitle.isNotEmpty
                                         ? _newEventTitle
-                                        : 'New Event',
+                                        : '',
                                 "start_date": DateFormat(
                                   "dd-MM-yyyy",
                                 ).format(selectedDay),
@@ -1245,6 +1661,12 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     );
     Overlay.of(context).insert(_overlayEntry!);
     _animationController!.forward();
+    // Start events list animation after a short delay
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (_eventsListController != null && mounted) {
+        _eventsListController!.forward();
+      }
+    });
   }
 
   // Offline UI Widget - shown when user is not connected to internet
@@ -1317,7 +1739,7 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
           ),
           Icon(
             isOnline ? Icons.wifi : Icons.wifi_off,
-            color: isOnline ? Colors.green : Colors.red,
+            color: isOnline ? Color(0xFF4CAF50) : Colors.red,
           ),
         ],
       ),
@@ -1645,6 +2067,8 @@ class _FullScreenCalendarState extends State<FullScreenCalendar> {
     _channel?.sink.close();
     _removeOverlay();
     _animationController?.dispose();
+    _eventsListController?.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 }
